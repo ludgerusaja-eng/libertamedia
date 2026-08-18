@@ -1,0 +1,6 @@
+{
+  "name": "libertamedia.com",
+  "description": "libertamedia.com adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat \"Media Untuk Semua\".",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

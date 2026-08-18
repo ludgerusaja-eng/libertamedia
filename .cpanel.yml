@@ -1,0 +1,10 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/libp7469/libertamedia
+    - export PUBLICPATH=/home/libp7469/public_html
+    - /bin/cp -R * $DEPLOYPATH
+    - cd $DEPLOYPATH && npm run build
+    - /bin/cp -f dist/index.html $PUBLICPATH/index.html
+    - /bin/mkdir -p $PUBLICPATH/assets
+    - /bin/cp -Rf dist/assets/* $PUBLICPATH/assets/
