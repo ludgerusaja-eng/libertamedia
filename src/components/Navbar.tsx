@@ -250,12 +250,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
 
           {/* Mobile menu hamburger toggle */}
-          <div className="flex md:hidden items-center justify-between w-full">
-            <div className="flex items-center gap-1.5 text-slate-800 font-extrabold text-xs tracking-wide uppercase">
-              <Flame className="w-4 h-4 text-[#E5252A]" />
-              <span>Kanal Berita</span>
-            </div>
-
+          <div className="flex md:hidden items-center justify-end w-full">
             <button
               id="mobile-nav-toggle-btn"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
