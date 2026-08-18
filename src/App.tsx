@@ -91,9 +91,13 @@ export default function App() {
     fetchSubmissions();
   }, [fetchLiveArticles, fetchSubmissions]);
 
-  // Check URL query param ?admin=true or secret shortcut (⌘+Shift+A) or direct article link /berita/:id
+  // Check URL query param ?admin=true or /admin route or secret shortcut (⌘+Shift+A) or direct article link /berita/:id
   useEffect(() => {
-    if (window.location.search.includes('admin=true') || window.location.hash.includes('admin')) {
+    if (
+      window.location.pathname.startsWith('/admin') ||
+      window.location.search.includes('admin=true') ||
+      window.location.hash.includes('admin')
+    ) {
       setIsAdminOpen(true);
     }
     const match = window.location.pathname.match(/\/berita\/(.+)/);
