@@ -166,13 +166,21 @@ export const Footer: React.FC<FooterProps> = ({
             &copy; {new Date().getFullYear()} <strong>libertamedia.com</strong> — Hak Cipta Dilindungi.
           </p>
 
-          <button
-            onClick={scrollToTop}
-            className="flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-full transition-colors"
-          >
-            <span>Kembali ke Atas</span>
-            <ArrowUp className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <a
+              href="/admin"
+              className="text-[11px] text-slate-500 hover:text-slate-300 font-bold transition-colors"
+            >
+              🔒 Portal Redaksi Admin
+            </a>
+            <button
+              onClick={scrollToTop}
+              className="flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <span>Kembali ke Atas</span>
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
       </div>

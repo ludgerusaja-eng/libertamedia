@@ -231,7 +231,7 @@ export default function App() {
               onClick={(e) => {
                 e.preventDefault();
                 setIsAdminOpen(false);
-                window.history.pushState({}, '', '/');
+                window.location.href = '/';
               }}
               className="text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 border border-slate-700"
             >
@@ -249,7 +249,7 @@ export default function App() {
             isOpen={true}
             onClose={() => {
               setIsAdminOpen(false);
-              window.history.pushState({}, '', '/');
+              window.location.href = '/';
             }}
             articles={articles}
             onArticlesChange={fetchLiveArticles}
