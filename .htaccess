@@ -1,0 +1,13 @@
+# Apache Rewrite Rules for libertamedia.com SPA & Node Backend Routing
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Allow direct access to uploaded media and asset files
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route all SPA subroutes (like /admin, /berita/*) to index.html
+  RewriteRule . /index.html [L]
+</IfModule>
