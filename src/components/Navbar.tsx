@@ -248,22 +248,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           </nav>
 
-          {/* Quick Active Filter / Status indicator on right */}
-          <div className="hidden lg:flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Kategori Aktif:</span>
-            <span className="bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-              {selectedCategory}
-            </span>
-            {selectedCategory !== 'Semua' && (
-              <button
-                onClick={() => onSelectCategory('Semua')}
-                className="text-xs text-red-600 hover:text-red-800 font-semibold underline ml-1"
-              >
-                Reset
-              </button>
-            )}
-          </div>
+
 
           {/* Mobile menu hamburger toggle */}
           <div className="flex md:hidden items-center justify-between w-full">
