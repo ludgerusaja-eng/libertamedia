@@ -42,20 +42,66 @@ function writeDatabase(data: any) {
 
 // Security & Authentication Configuration
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "libertamedia2026";
-const ADMIN_SESSIONS = new Set<string>();
+if (!process.env.ADMIN_PASSWORD) {
+  console.warn("⚠️ [SECURITY WARNING] Default ADMIN_PASSWORD in use. Set ADMIN_PASSWORD in production .env!");
+}
 
-// Auth Middleware: Protects state-changing endpoints
+interface SessionInfo {
+  token: string;
+  expiresAt: number;
+  role: string;
+}
+
+const ADMIN_SESSIONS = new Map<string, SessionInfo>();
+
+// IP Rate Limiting Tracker for Login (Max 5 attempts / 15 minutes)
+const LOGIN_ATTEMPTS = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const attempt = LOGIN_ATTEMPTS.get(ip);
+  if (!attempt) return true;
+  if (now > attempt.resetAt) {
+    LOGIN_ATTEMPTS.delete(ip);
+    return true;
+  }
+  return attempt.count < 5;
+}
+
+function recordFailedAttempt(ip: string): void {
+  const now = Date.now();
+  const attempt = LOGIN_ATTEMPTS.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  attempt.count += 1;
+  LOGIN_ATTEMPTS.set(ip, attempt);
+}
+
+// Input Sanitization Helper: Strips harmful script tags & dangerous HTML
+function sanitizeText(str: string): string {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/<script\b[^<]*>(?:[\s\S]*?)<\/script>/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/onerror\s*=/gi, "")
+    .replace(/onload\s*=/gi, "");
+}
+
+// Auth Middleware: Protects state-changing endpoints with 24h token validation
 function requireAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization || req.headers["x-admin-token"];
   const token = authHeader ? String(authHeader).replace("Bearer ", "").trim() : null;
 
   if (token && ADMIN_SESSIONS.has(token)) {
-    return next();
+    const session = ADMIN_SESSIONS.get(token)!;
+    if (Date.now() < session.expiresAt) {
+      return next();
+    } else {
+      ADMIN_SESSIONS.delete(token); // Auto-cleanup expired token
+    }
   }
 
   return res.status(401).json({
     success: false,
-    message: "Akses ditolak: Token autentikasi redaksi tidak valid atau telah kedaluwarsa."
+    message: "Akses ditolak: Token autentikasi redaksi tidak valid atau telah kedaluwarsa (Masa aktif 24 jam)."
   });
 }
 
@@ -63,23 +109,43 @@ function requireAdminAuth(req: express.Request, res: express.Response, next: exp
  * API ROUTES: AUTHENTICATION
  * ----------------------------------------------------------- */
 
-// POST /api/auth/login - Backend password verification & token issuance
+// POST /api/auth/login - Backend password verification with IP Rate Limiting & 24h Token
 app.post("/api/auth/login", (req, res) => {
+  const clientIp = req.ip || req.socket.remoteAddress || "127.0.0.1";
+
+  if (!checkRateLimit(String(clientIp))) {
+    return res.status(429).json({
+      success: false,
+      message: "Terlalu banyak percobaan login gagal. Silakan coba lagi dalam 15 menit."
+    });
+  }
+
   const { password } = req.body;
   if (!password || (password !== ADMIN_PASSWORD && password !== "admin123")) {
+    recordFailedAttempt(String(clientIp));
     return res.status(401).json({
       success: false,
       message: "Password Admin tidak sesuai."
     });
   }
 
+  // Clear rate limit counter on success
+  LOGIN_ATTEMPTS.delete(String(clientIp));
+
   const token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-  ADMIN_SESSIONS.add(token);
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 Hours Expiry
+
+  ADMIN_SESSIONS.set(token, {
+    token,
+    expiresAt,
+    role: "SUPER_ADMIN"
+  });
 
   res.json({
     success: true,
     message: "Login Redaksi Berhasil",
     token,
+    expiresAt,
     user: {
       role: "SUPER_ADMIN",
       name: "Dewan Redaksi",
@@ -103,11 +169,14 @@ app.get("/api/auth/me", (req, res) => {
   const authHeader = req.headers.authorization || req.headers["x-admin-token"];
   const token = authHeader ? String(authHeader).replace("Bearer ", "").trim() : null;
   if (token && ADMIN_SESSIONS.has(token)) {
-    return res.json({
-      success: true,
-      authenticated: true,
-      user: { role: "SUPER_ADMIN", name: "Dewan Redaksi" }
-    });
+    const session = ADMIN_SESSIONS.get(token)!;
+    if (Date.now() < session.expiresAt) {
+      return res.json({
+        success: true,
+        authenticated: true,
+        user: { role: session.role, name: "Dewan Redaksi" }
+      });
+    }
   }
   res.json({ success: true, authenticated: false });
 });
@@ -591,14 +660,23 @@ app.post("/api/upload", requireAdminAuth, (req, res) => {
     res.json({ success: true, url: imageUrl, message: "Gambar berhasil di-upload secara aman" });
   } catch (err: any) {
     console.error("Upload error:", err);
-    res.status(500).json({ success: false, message: err.message || "Gagal meng-upload gambar" });
   }
 });
 
-// 17. GET /rss.xml - RSS 2.0 Feed for Google News Indexing
+// In-Memory Caching for RSS Feed & OpenGraph Social Media Injector
+let RSS_CACHE: { xml: string; timestamp: number } | null = null;
+const OG_CACHE = new Map<string, { html: string; timestamp: number }>();
+
+// 17. GET /rss.xml - RSS 2.0 Feed for Google News Indexing with 15-Minute Cache
 app.get("/rss.xml", (req, res) => {
+  const now = Date.now();
+  if (RSS_CACHE && now - RSS_CACHE.timestamp < 15 * 60 * 1000) {
+    res.header("Content-Type", "application/xml; charset=utf-8");
+    return res.send(RSS_CACHE.xml);
+  }
+
   const db = readDatabase();
-  const articles = db.articles || [];
+  const articles = (db.articles || []).filter((a) => (a.status || "PUBLISHED") === "PUBLISHED");
   const domain = process.env.APP_URL || "https://libertamedia.com";
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -614,10 +692,11 @@ app.get("/rss.xml", (req, res) => {
   articles.slice(0, 30).forEach((art) => {
     const cleanTitle = (art.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const cleanSummary = (art.summary || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const itemUrl = `${domain}/berita/${art.slug || art.id}`;
     xml += `    <item>
       <title>${cleanTitle}</title>
-      <link>${domain}/berita/${art.id}</link>
-      <guid>${domain}/berita/${art.id}</guid>
+      <link>${itemUrl}</link>
+      <guid>${itemUrl}</guid>
       <pubDate>${new Date(art.date || Date.now()).toUTCString()}</pubDate>
       <description>${cleanSummary}</description>
       <category>${art.category || 'Berita'}</category>
@@ -626,14 +705,24 @@ app.get("/rss.xml", (req, res) => {
 
   xml += `  </channel>\n</rss>`;
 
+  RSS_CACHE = { xml, timestamp: now };
+
   res.header("Content-Type", "application/xml; charset=utf-8");
   res.send(xml);
 });
 
-// 18. GET /berita/:id - Open Graph Dynamic Social Media Preview
+// 18. GET /berita/:id - Open Graph Dynamic Social Media Preview with 5-Minute Cache
 app.get("/berita/:id", (req, res) => {
+  const articleIdOrSlug = req.params.id;
+  const now = Date.now();
+
+  const cached = OG_CACHE.get(articleIdOrSlug);
+  if (cached && now - cached.timestamp < 5 * 60 * 1000) {
+    return res.send(cached.html);
+  }
+
   const db = readDatabase();
-  const article = db.articles.find((a) => a.id === req.params.id);
+  const article = db.articles.find((a) => a.id === articleIdOrSlug || a.slug === articleIdOrSlug);
   const distPath = getDistPath();
   const indexPath = path.join(distPath, "index.html");
 
@@ -644,22 +733,20 @@ app.get("/berita/:id", (req, res) => {
   let html = fs.readFileSync(indexPath, "utf-8");
   if (article) {
     const domain = process.env.APP_URL || "https://libertamedia.com";
-    const ogTitle = `${article.title} | libertamedia.com`;
-    const ogDesc = article.summary || "Portal berita nasional & opini publik independen.";
+    const ogTitle = sanitizeText(`${article.title} | libertamedia.com`);
+    const ogDesc = sanitizeText(article.summary || "Portal berita nasional & opini publik independen.");
     const ogImage = article.image.startsWith("http") ? article.image : `${domain}${article.image}`;
-    const ogUrl = `${domain}/berita/${article.id}`;
-
-    html = html.replace(/<title>.*?<\/title>/i, `<title>${ogTitle}</title>`);
-    html = html.replace(/<meta name="title" content=".*?" \/>/i, `<meta name="title" content="${ogTitle}" />`);
-    html = html.replace(/<meta name="description" content=".*?" \/>/i, `<meta name="description" content="${ogDesc}" />`);
+    const ogUrl = `${domain}/berita/${article.slug || article.id}`;
 
     const ogTags = `
+    <!-- Dynamic Open Graph SSR Injection -->
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${ogUrl}" />
     <meta property="og:title" content="${ogTitle}" />
     <meta property="og:description" content="${ogDesc}" />
     <meta property="og:image" content="${ogImage}" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@libertamedia" />
     <meta name="twitter:title" content="${ogTitle}" />
     <meta name="twitter:description" content="${ogDesc}" />
     <meta name="twitter:image" content="${ogImage}" />
@@ -667,6 +754,7 @@ app.get("/berita/:id", (req, res) => {
     html = html.replace("</head>", `${ogTags}</head>`);
   }
 
+  OG_CACHE.set(articleIdOrSlug, { html, timestamp: now });
   res.send(html);
 });
 

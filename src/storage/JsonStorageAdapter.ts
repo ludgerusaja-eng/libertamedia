@@ -5,6 +5,7 @@ import { DBStructure, IStorageAdapter } from './Repository';
 export class JsonStorageAdapter implements IStorageAdapter {
   private dataDir: string;
   private dbFile: string;
+  private isWriting = false;
 
   constructor(dataDir: string) {
     this.dataDir = dataDir;
@@ -52,6 +53,7 @@ export class JsonStorageAdapter implements IStorageAdapter {
   public writeDatabase(data: DBStructure): boolean {
     const tempFile = path.join(this.dataDir, `db.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
     try {
+      this.isWriting = true;
       if (!fs.existsSync(this.dataDir)) {
         fs.mkdirSync(this.dataDir, { recursive: true });
       }
@@ -66,6 +68,8 @@ export class JsonStorageAdapter implements IStorageAdapter {
         try { fs.unlinkSync(tempFile); } catch (e) {}
       }
       return false;
+    } finally {
+      this.isWriting = false;
     }
   }
 }
