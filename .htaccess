@@ -3,21 +3,21 @@
   RewriteEngine On
   RewriteBase /
 
-  # 1. EXCLUDE API routes, SSR routes, Sitemap, RSS from Apache static rewrite (Pass to Node.js backend!)
-  RewriteCond %{REQUEST_URI} ^/api/ [NC,OR]
-  RewriteCond %{REQUEST_URI} ^/rss\.xml [NC,OR]
-  RewriteCond %{REQUEST_URI} ^/sitemap\.xml [NC,OR]
-  RewriteCond %{REQUEST_URI} ^/robots\.txt [NC,OR]
-  RewriteCond %{REQUEST_URI} ^/berita/ [NC,OR]
-  RewriteCond %{REQUEST_URI} ^/p/ [NC,OR]
-  RewriteCond %{REQUEST_URI} ^/tentang-kami [NC]
-  RewriteRule ^ - [L]
-
-  # 2. Allow direct access to existing physical assets & files
+  # 1. Allow direct access to real existing static files and directories (assets, uploads, images)
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # 3. Fallback only non-API frontend routes to index.html for SPA hydration
-  RewriteRule ^ index.html [L]
+  # 2. Pass all API requests (/api/*) directly to Node.js backend (app.js)
+  RewriteRule ^api(/.*)?$ app.js [QSA,L]
+
+  # 3. Pass all SSR dynamic routes (/berita/*, /p/*, /rss.xml, /sitemap.xml, /robots.txt) to Node.js backend
+  RewriteRule ^berita(/.*)?$ app.js [QSA,L]
+  RewriteRule ^p(/.*)?$ app.js [QSA,L]
+  RewriteRule ^rss\.xml$ app.js [QSA,L]
+  RewriteRule ^sitemap\.xml$ app.js [QSA,L]
+  RewriteRule ^robots\.txt$ app.js [QSA,L]
+
+  # 4. Fallback all remaining frontend SPA subroutes to index.html for hydration
+  RewriteRule . index.html [L]
 </IfModule>
