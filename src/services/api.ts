@@ -405,14 +405,14 @@ export const api = {
   },
 };
 
-const getWpApiUrl = (): string | null => {
+const getWpApiUrl = (): string => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WP_API_URL) {
     return import.meta.env.VITE_WP_API_URL;
   }
   if (typeof process !== 'undefined' && process.env?.VITE_WP_API_URL) {
     return process.env.VITE_WP_API_URL;
   }
-  return null;
+  return 'https://libertamedia.com/cms/wp-json/wp/v2';
 };
 
 // Helper Transformer: Format data WordPress ke Interface Article Frontend Liberta
