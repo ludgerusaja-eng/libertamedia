@@ -23,6 +23,7 @@ const EditorialModal = lazy(() => import('./components/EditorialModal').then(m =
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const SocialPlatformModal = lazy(() => import('./components/SocialPlatformModal').then(m => ({ default: m.SocialPlatformModal })));
 const NewsletterModal = lazy(() => import('./components/SocialPlatformModal').then(m => ({ default: m.NewsletterModal })));
+const AboutModal = lazy(() => import('./components/AboutModal').then(m => ({ default: m.AboutModal })));
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>(INITIAL_ARTICLES);
@@ -38,6 +39,7 @@ export default function App() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isSubmitStoryOpen, setIsSubmitStoryOpen] = useState(false);
   const [isEditorialOpen, setIsEditorialOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -303,6 +305,7 @@ export default function App() {
           }}
           onScrollToSection={handleScrollToSection}
           onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
+          onOpenAbout={() => setIsAboutOpen(true)}
         />
       </div>
 
@@ -530,6 +533,12 @@ export default function App() {
         <NewsletterModal
           isOpen={isNewsletterOpen}
           onClose={() => setIsNewsletterOpen(false)}
+        />
+
+        {/* Static About Us (Tentang Kami) Modal */}
+        <AboutModal
+          isOpen={isAboutOpen}
+          onClose={() => setIsAboutOpen(false)}
         />
       </Suspense>
 

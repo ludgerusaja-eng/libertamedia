@@ -19,6 +19,7 @@ interface NavbarProps {
   onSelectCategory: (category: CategoryType) => void;
   onScrollToSection: (sectionId: string) => void;
   onOpenSocialModal: (platformName: string) => void;
+  onOpenAbout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,6 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectCategory,
   onScrollToSection,
   onOpenSocialModal,
+  onOpenAbout,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -210,6 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <button
                 id="nav-menu-about"
+                onClick={() => onOpenAbout && onOpenAbout()}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-bold text-sm transition-colors ${
                   activeDropdown === 'about'
                     ? 'text-[#E5252A] bg-red-50'
@@ -222,10 +225,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               {/* Tentang Kami Dropdown Card */}
-              <div className="absolute top-full right-0 w-80 bg-white rounded-b-xl shadow-xl border-t-2 border-[#E5252A] border-x border-b border-slate-200 p-4 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200 z-50">
-                <div className="flex items-center gap-1.5 mb-2 text-[#E5252A]">
-                  <Info className="w-4 h-4" />
-                  <span className="font-extrabold text-xs uppercase tracking-wider">Tentang Kami</span>
+              <div 
+                onClick={() => onOpenAbout && onOpenAbout()}
+                className="absolute top-full right-0 w-80 bg-white rounded-b-xl shadow-xl border-t-2 border-[#E5252A] border-x border-b border-slate-200 p-4 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200 z-50 cursor-pointer hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center justify-between mb-2 text-[#E5252A]">
+                  <div className="flex items-center gap-1.5">
+                    <Info className="w-4 h-4" />
+                    <span className="font-extrabold text-xs uppercase tracking-wider">Tentang Kami</span>
+                  </div>
+                  <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">Buka Halaman →</span>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed font-normal">
                   <strong>libertamedia.com</strong> adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat "Media Untuk Semua".
@@ -363,12 +372,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Tentang Kami Section */}
-            <div className="border-t border-slate-100 pt-3 space-y-1.5">
-              <div className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 text-[#E5252A]">
-                <Info className="w-4 h-4" />
-                <span>Tentang Kami</span>
+            <div 
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenAbout && onOpenAbout();
+              }}
+              className="border-t border-slate-100 pt-3 space-y-1.5 cursor-pointer group"
+            >
+              <div className="font-extrabold text-sm text-slate-900 flex items-center justify-between text-[#E5252A]">
+                <div className="flex items-center gap-1.5">
+                  <Info className="w-4 h-4" />
+                  <span>Tentang Kami</span>
+                </div>
+                <span className="text-xs text-slate-400 font-medium group-hover:text-[#E5252A]">Buka →</span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 group-hover:bg-red-50/50 transition-colors">
                 <strong>libertamedia.com</strong> adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat "Media Untuk Semua".
               </p>
             </div>

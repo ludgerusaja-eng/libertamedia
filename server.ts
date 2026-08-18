@@ -873,6 +873,53 @@ app.get("/berita/:id", (req, res) => {
   res.send(html);
 });
 
+// Dynamic SSR Route for Static Tentang Kami Page with AboutPage Schema.org JSON-LD
+app.get("/tentang-kami", (req, res) => {
+  const distPath = getDistPath();
+  const indexPath = path.join(distPath, "index.html");
+
+  if (!fs.existsSync(indexPath)) {
+    return res.status(404).send("index.html not found.");
+  }
+
+  let html = fs.readFileSync(indexPath, "utf-8");
+  const domain = process.env.APP_URL || "https://libertamedia.com";
+  const title = "Tentang Kami | libertamedia.com";
+  const desc = "libertamedia.com adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat Media Untuk Semua.";
+
+  const aboutSchema = {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    "name": title,
+    "description": desc,
+    "url": `${domain}/tentang-kami`,
+    "publisher": {
+      "@type": "NewsMediaOrganization",
+      "name": "libertamedia",
+      "url": domain,
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${domain}/uploads/logo.png`
+      }
+    }
+  };
+
+  const metaTags = `
+  <!-- Static About Us Page SSR & Schema.org JSON-LD -->
+  <title>${title}</title>
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="${domain}/tentang-kami" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${desc}" />
+  <script type="application/ld+json">
+  ${JSON.stringify(aboutSchema, null, 2)}
+  </script>
+  `;
+
+  html = html.replace("</head>", `${metaTags}</head>`);
+  res.send(html);
+});
+
 // Task 4: Dynamic Sitemap.xml Generator with 15-Minute Cache
 let SITEMAP_CACHE: { xml: string; timestamp: number } | null = null;
 
@@ -893,6 +940,11 @@ app.get("/sitemap.xml", (req, res) => {
     <loc>${domain}</loc>
     <changefreq>always</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${domain}/tentang-kami</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>${domain}/?admin=true</loc>
