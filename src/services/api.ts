@@ -412,7 +412,7 @@ const getWpApiUrl = (): string => {
   if (typeof process !== 'undefined' && process.env?.VITE_WP_API_URL) {
     return process.env.VITE_WP_API_URL;
   }
-  return 'https://libertamedia.com/cms/wp-json/wp/v2';
+  return 'https://admin.libertamedia.com/wp-json/wp/v2';
 };
 
 // Helper Transformer: Format data WordPress ke Interface Article Frontend Liberta
