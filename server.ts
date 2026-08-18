@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
+import sanitizeHtml from "sanitize-html";
 import { JsonStorageAdapter } from "./src/storage/JsonStorageAdapter";
 
 const getDirname = (): string => {
@@ -46,6 +48,18 @@ if (!process.env.ADMIN_PASSWORD) {
   console.warn("⚠️ [SECURITY WARNING] Default ADMIN_PASSWORD in use. Set ADMIN_PASSWORD in production .env!");
 }
 
+// Constant-time password comparison to prevent timing attacks
+function safeComparePassword(inputPassword: string, expectedPassword: string): boolean {
+  if (!inputPassword || !expectedPassword) return false;
+  try {
+    const hashA = crypto.createHash("sha256").update(String(inputPassword)).digest();
+    const hashB = crypto.createHash("sha256").update(String(expectedPassword)).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+  } catch (e) {
+    return false;
+  }
+}
+
 interface SessionInfo {
   token: string;
   expiresAt: number;
@@ -75,14 +89,25 @@ function recordFailedAttempt(ip: string): void {
   LOGIN_ATTEMPTS.set(ip, attempt);
 }
 
-// Input Sanitization Helper: Strips harmful script tags & dangerous HTML
+// Battle-tested Input Sanitization using sanitize-html with strict Whitelist
 function sanitizeText(str: string): string {
   if (typeof str !== "string") return "";
-  return str
-    .replace(/<script\b[^<]*>(?:[\s\S]*?)<\/script>/gi, "")
-    .replace(/javascript:/gi, "")
-    .replace(/onerror\s*=/gi, "")
-    .replace(/onload\s*=/gi, "");
+  return sanitizeHtml(str, {
+    allowedTags: [
+      "p", "b", "i", "strong", "em", "a", "img", "ul", "ol", "li",
+      "h1", "h2", "h3", "h4", "blockquote", "code", "pre", "br", "span"
+    ],
+    allowedAttributes: {
+      "a": ["href", "name", "target", "rel"],
+      "img": ["src", "alt", "title", "width", "height"],
+      "span": ["class"]
+    },
+    allowedSchemes: ["http", "https", "mailto"],
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"]
+    },
+    allowProtocolRelative: false
+  }).trim();
 }
 
 // Auth Middleware: Protects state-changing endpoints with 24h token validation
@@ -121,7 +146,9 @@ app.post("/api/auth/login", (req, res) => {
   }
 
   const { password } = req.body;
-  if (!password || (password !== ADMIN_PASSWORD && password !== "admin123")) {
+  const isMatch = safeComparePassword(password, ADMIN_PASSWORD) || safeComparePassword(password, "admin123");
+
+  if (!isMatch) {
     recordFailedAttempt(String(clientIp));
     return res.status(401).json({
       success: false,
@@ -286,22 +313,26 @@ app.post("/api/articles", requireAdminAuth, (req, res) => {
   const wordCount = contentArray.join(" ").split(/\s+/).length;
   const readMinutes = Math.max(1, Math.ceil(wordCount / 200));
 
+  const sanitizedTitle = sanitizeText(body.title);
+  const sanitizedSummary = sanitizeText(body.summary || (contentArray[0] ? contentArray[0].substring(0, 160) + "..." : ""));
+  const sanitizedContentArray = contentArray.map((p: string) => sanitizeText(p));
+
   const newArticle = {
     id: `art-${Date.now()}`,
     slug,
-    title: body.title,
-    summary: body.summary || (contentArray[0] ? contentArray[0].substring(0, 160) + "..." : ""),
-    content: contentArray,
-    category: body.category || "Pemerintahan",
-    subcategory: body.subcategory || "",
-    pillar: body.pillar || "news",
+    title: sanitizedTitle,
+    summary: sanitizedSummary,
+    content: sanitizedContentArray,
+    category: sanitizeText(body.category || "Pemerintahan"),
+    subcategory: sanitizeText(body.subcategory || ""),
+    pillar: sanitizeText(body.pillar || "news"),
     author: {
-      name: body.author?.name || "Redaksi Liberta",
-      role: body.author?.role || "Tim Redaksi",
+      name: sanitizeText(body.author?.name || "Redaksi Liberta"),
+      role: sanitizeText(body.author?.role || "Tim Redaksi"),
       avatar:
         body.author?.avatar ||
         "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop",
-      institution: body.author?.institution || "Dewan Redaksi libertamedia.com"
+      institution: sanitizeText(body.author?.institution || "Dewan Redaksi libertamedia.com")
     },
     publishedAt: "Baru saja",
     readTime: `${readMinutes} Menit Baca`,
@@ -309,7 +340,7 @@ app.post("/api/articles", requireAdminAuth, (req, res) => {
     image:
       body.image ||
       "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=1200&auto=format&fit=crop",
-    caption: body.caption || body.title,
+    caption: sanitizeText(body.caption || sanitizedTitle),
     tags: Array.isArray(body.tags)
       ? body.tags
       : typeof body.tags === "string"
@@ -460,13 +491,13 @@ app.post("/api/submissions", (req, res) => {
 
   const newSubmission = {
     id: `sub-${Date.now()}`,
-    title: title.trim(),
-    category: category || "Opini",
-    authorName: authorName.trim(),
-    email: (email && email.trim()) || "-",
-    institution: (institution && institution.trim()) || "Masyarakat Umum",
-    abstract: (abstract && abstract.trim()) || "",
-    content: content.trim(),
+    title: sanitizeText(title.trim()),
+    category: sanitizeText(category || "Opini"),
+    authorName: sanitizeText(authorName.trim()),
+    email: sanitizeText((email && email.trim()) || "-"),
+    institution: sanitizeText((institution && institution.trim()) || "Masyarakat Umum"),
+    abstract: sanitizeText((abstract && abstract.trim()) || ""),
+    content: sanitizeText(content.trim()),
     submittedAt: new Date().toLocaleDateString("id-ID", {
       day: "numeric",
       month: "long",
@@ -636,10 +667,10 @@ app.post("/api/upload", requireAdminAuth, (req, res) => {
 
     const matches = imageBase64.match(/^data:image\/([a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
     const rawExt = matches ? matches[1].toLowerCase() : "jpg";
-    const allowedExts = ["jpg", "jpeg", "png", "webp", "gif", "svg+xml"];
+    const allowedExts = ["jpg", "jpeg", "png", "webp", "gif"];
     
     if (!allowedExts.some((e) => rawExt.includes(e))) {
-      return res.status(400).json({ success: false, message: "Format gambar tidak didukung. Hanya JPG, PNG, WEBP, GIF." });
+      return res.status(400).json({ success: false, message: "Format gambar tidak didukung. Hanya JPG, JPEG, PNG, WEBP, GIF." });
     }
 
     const ext = rawExt.includes("png") ? "png" : rawExt.includes("webp") ? "webp" : rawExt.includes("gif") ? "gif" : "jpg";
