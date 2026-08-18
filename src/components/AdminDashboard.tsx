@@ -48,8 +48,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [filterCategory, setFilterCategory] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // New Article Form state
+  // New & Edit Article Form state
   const [isCreatingArticle, setIsCreatingArticle] = useState(false);
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<CategoryType>('Pemerintahan');
   const [newPillar, setNewPillar] = useState<'news' | 'opinion' | 'student' | 'international'>('news');
@@ -61,6 +62,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isHero, setIsHero] = useState(false);
   const [isEditorChoice, setIsEditorChoice] = useState(false);
   const [isTrending, setIsTrending] = useState(false);
+
+  const handleOpenCreate = () => {
+    setEditingArticleId(null);
+    setNewTitle('');
+    setNewCategory('Pemerintahan');
+    setNewPillar('news');
+    setNewSummary('');
+    setNewContent('');
+    setNewImage('');
+    setNewAuthorName('Dewan Redaksi');
+    setNewAuthorRole('Tim Jurnalis Liberta');
+    setIsHero(false);
+    setIsEditorChoice(false);
+    setIsTrending(false);
+    setIsCreatingArticle(true);
+  };
+
+  const handleOpenEdit = (art: Article) => {
+    setEditingArticleId(art.id);
+    setNewTitle(art.title);
+    setNewCategory(art.category);
+    setNewPillar(art.pillar || 'news');
+    setNewSummary(art.summary || '');
+    setNewContent(Array.isArray(art.content) ? art.content.join('\n\n') : art.content || '');
+    setNewImage(art.image || '');
+    setNewAuthorName(art.author?.name || 'Dewan Redaksi');
+    setNewAuthorRole(art.author?.role || 'Tim Jurnalis Liberta');
+    setIsHero(art.isHero || false);
+    setIsEditorChoice(art.isEditorChoice || false);
+    setIsTrending(art.isTrending || false);
+    setIsCreatingArticle(true);
+  };
 
   // Password Protection state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => sessionStorage.getItem('admin_authenticated') === 'true');
@@ -99,6 +132,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } finally {
       setIsUploadingImage(false);
     }
+  };
+
+  const insertTextFormatting = (prefix: string, suffix: string = '') => {
+    setNewContent((prev) => prev + `${prefix} Teks ${suffix}`);
   };
 
   useEffect(() => {
@@ -191,7 +228,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     try {
       setLoading(true);
-      await api.createArticle({
+      const articlePayload = {
         title: newTitle,
         category: newCategory,
         pillar: newPillar,
@@ -207,16 +244,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isHero,
         isEditorChoice,
         isTrending
-      });
+      };
+
+      if (editingArticleId) {
+        await api.updateArticle(editingArticleId, articlePayload);
+        showToast('Artikel berhasil diperbarui!');
+      } else {
+        await api.createArticle(articlePayload);
+        showToast('Artikel baru berhasil diterbitkan!');
+      }
+
       setIsCreatingArticle(false);
+      setEditingArticleId(null);
       setNewTitle('');
       setNewSummary('');
       setNewContent('');
       setNewImage('');
       onArticlesChange();
-      showToast('Artikel baru berhasil diterbitkan secara otomatis!');
     } catch (err: any) {
-      alert(err.message || 'Gagal membuat artikel');
+      alert(err.message || 'Gagal menyimpan artikel');
     } finally {
       setLoading(false);
     }
@@ -387,7 +433,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Quick Action Button */}
             <button
-              onClick={() => { setActiveTab('articles'); setIsCreatingArticle(true); }}
+              onClick={() => { setActiveTab('articles'); handleOpenCreate(); }}
               className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all"
             >
               <Plus className="w-4 h-4" />
@@ -502,6 +548,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </button>
 
                               <button
+                                onClick={() => handleOpenEdit(article)}
+                                disabled={loading}
+                                className="p-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-all flex items-center gap-1 text-xs font-bold px-3"
+                                title="Edit Berita Ini (Blogger Style)"
+                              >
+                                ✏️ Edit
+                              </button>
+
+                              <button
                                 onClick={() => handleDeleteArticle(article.id, article.title)}
                                 disabled={loading}
                                 className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all"
@@ -516,12 +571,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                 ) : (
-                  /* Form Artikel Baru */
+                  <>
+                  {/* Form Artikel (Baru / Edit) */}
                   <form onSubmit={handleCreateArticleSubmit} className="space-y-6 max-w-3xl">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                       <h3 className="text-base font-extrabold text-white flex items-center gap-2">
                         <Plus className="w-5 h-5 text-red-500" />
-                        Tulis & Terbitkan Artikel Baru
+                        {editingArticleId ? '✏️ Edit Artikel / Berita' : '📝 Tulis & Terbitkan Artikel Baru'}
                       </h3>
                       <button
                         type="button"
@@ -612,14 +668,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Isi Berita Lengkap</label>
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                          <label className="block text-xs font-bold text-slate-300">Isi Naskah Berita Lengkap (Editor Redaksi)</label>
+                          {/* Blogger / WordPress Style Toolbar */}
+                          <div className="flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300">
+                            <button type="button" onClick={() => insertTextFormatting('**', '**')} className="px-2 py-0.5 hover:bg-slate-800 rounded font-bold transition-all text-white" title="Tebal (Bold)">B</button>
+                            <button type="button" onClick={() => insertTextFormatting('*', '*')} className="px-2 py-0.5 hover:bg-slate-800 rounded italic transition-all text-white" title="Miring (Italic)">I</button>
+                            <button type="button" onClick={() => insertTextFormatting('\n## ', '\n')} className="px-2 py-0.5 hover:bg-slate-800 rounded font-extrabold text-amber-400 transition-all" title="Sub-Judul (H2)">H2</button>
+                            <button type="button" onClick={() => insertTextFormatting('\n> "', '"\n')} className="px-2 py-0.5 hover:bg-slate-800 rounded text-blue-400 transition-all" title="Kutipan (Quote)">💬 Kutipan</button>
+                            <button type="button" onClick={() => insertTextFormatting('\n- ')} className="px-2 py-0.5 hover:bg-slate-800 rounded text-emerald-400 transition-all" title="Daftar Poin">📋 Poin</button>
+                          </div>
+                        </div>
                         <textarea
-                          rows={8}
+                          rows={10}
                           required
-                          placeholder="Tulis artikel berita secara komprehensif di sini..."
+                          placeholder="Tulis naskah artikel berita secara komprehensif di sini..."
                           value={newContent}
                           onChange={e => setNewContent(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+                          className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-red-500 font-sans leading-relaxed"
                         />
                       </div>
 
@@ -664,10 +730,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-900/40 flex items-center gap-2"
                       >
                         <Send className="w-4 h-4" />
-                        {loading ? 'Menerbitkan...' : 'Terbitkan Berita'}
+                        {loading ? 'Menyimpan...' : (editingArticleId ? 'Simpan Perubahan' : 'Terbitkan Berita')}
                       </button>
                     </div>
                   </form>
+                  </>
                 )}
               </div>
             )}
