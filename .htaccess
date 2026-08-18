@@ -1,13 +1,23 @@
-# Apache Rewrite Rules for libertamedia.com SPA & Node Backend Routing
+# Apache Rewrite Rules for libertamedia.com (cPanel Node.js / Phusion Passenger Routing)
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-  
-  # Allow direct access to uploaded media and asset files
+
+  # 1. EXCLUDE API routes, SSR routes, Sitemap, RSS from Apache static rewrite (Pass to Node.js backend!)
+  RewriteCond %{REQUEST_URI} ^/api/ [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/rss\.xml [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/sitemap\.xml [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/robots\.txt [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/berita/ [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/p/ [NC,OR]
+  RewriteCond %{REQUEST_URI} ^/tentang-kami [NC]
+  RewriteRule ^ - [L]
+
+  # 2. Allow direct access to existing physical assets & files
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # Route all SPA subroutes (like /admin, /berita/*) to index.html
-  RewriteRule . /index.html [L]
+  # 3. Fallback only non-API frontend routes to index.html for SPA hydration
+  RewriteRule ^ index.html [L]
 </IfModule>
