@@ -95,8 +95,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsCreatingArticle(true);
   };
 
-  // Password Protection state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => sessionStorage.getItem('admin_authenticated') === 'true');
+  // Password Protection state with try-catch safety
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('admin_authenticated') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
 
@@ -107,7 +113,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (passwordInput === 'libertamedia2026' || passwordInput === 'admin123') {
       setIsAuthenticated(true);
-      sessionStorage.setItem('admin_authenticated', 'true');
+      try {
+        sessionStorage.setItem('admin_authenticated', 'true');
+      } catch (e) {}
       setPasswordError(false);
     } else {
       setPasswordError(true);
@@ -116,7 +124,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('admin_authenticated');
+    try {
+      sessionStorage.removeItem('admin_authenticated');
+    } catch (e) {}
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,7 +157,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const loadSubmissions = async () => {
     try {
       const data = await api.getSubmissions();
-      setSubmissions(data);
+      setSubmissions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn('Load submissions error:', err);
     }
@@ -160,9 +170,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredArticles = articles.filter(a => {
+  const safeArticles = Array.isArray(articles) ? articles : [];
+  const filteredArticles = safeArticles.filter(a => {
+    if (!a) return false;
     const matchCat = filterCategory === 'Semua' || a.category === filterCategory;
-    const matchQ = !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.summary.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchQ = !searchQuery || 
+      (a.title && a.title.toLowerCase().includes(searchQuery.toLowerCase())) || 
+      (a.summary && a.summary.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchCat && matchQ;
   });
 
