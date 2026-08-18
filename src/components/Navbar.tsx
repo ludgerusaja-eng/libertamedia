@@ -53,7 +53,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   const quickFilterPills: CategoryType[] = [
-    'Semua',
     'Pemerintahan',
     'Politik',
     'Mahasiswa',
@@ -252,13 +251,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Mobile menu hamburger toggle */}
           <div className="flex md:hidden items-center justify-between w-full">
-            <button
-              onClick={() => onSelectCategory('Semua')}
-              className="font-bold text-sm text-[#E5252A] flex items-center gap-1"
-            >
-              <Flame className="w-4 h-4 fill-current text-red-500" />
-              <span>{selectedCategory}</span>
-            </button>
+            <div className="flex items-center gap-1.5 text-slate-800 font-extrabold text-xs tracking-wide uppercase">
+              <Flame className="w-4 h-4 text-[#E5252A]" />
+              <span>Kanal Berita</span>
+            </div>
 
             <button
               id="mobile-nav-toggle-btn"
