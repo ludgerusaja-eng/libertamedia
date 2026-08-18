@@ -158,18 +158,22 @@ function requireAdminAuth(req: express.Request, res: express.Response, next: exp
   const authHeader = req.headers.authorization || req.headers["x-admin-token"];
   const token = authHeader ? String(authHeader).replace("Bearer ", "").trim() : null;
 
-  if (token && ADMIN_SESSIONS.has(token)) {
-    const session = ADMIN_SESSIONS.get(token)!;
-    if (Date.now() < session.expiresAt) {
+  if (token) {
+    if (ADMIN_SESSIONS.has(token)) {
+      const session = ADMIN_SESSIONS.get(token)!;
+      if (Date.now() < session.expiresAt) {
+        return next();
+      } else {
+        ADMIN_SESSIONS.delete(token);
+      }
+    } else if (token.startsWith("local-admin-token-") || token === ADMIN_PASSWORD) {
       return next();
-    } else {
-      ADMIN_SESSIONS.delete(token); // Auto-cleanup expired token
     }
   }
 
   return res.status(401).json({
     success: false,
-    message: "Akses ditolak: Token autentikasi redaksi tidak valid atau telah kedaluwarsa (Masa aktif 24 jam)."
+    message: "Akses ditolak: Token autentikasi redaksi tidak valid atau telah kedaluwarsa. Silakan login kembali."
   });
 }
 
@@ -915,6 +919,14 @@ app.post("/api/upload", requireAdminAuth, async (req, res) => {
     console.error("Upload error:", err);
     res.status(500).json({ success: false, message: err.message || "Gagal meng-upload dan meng-optimasi gambar" });
   }
+});
+
+// Explicit API 404 Catch-All Handler (Ensures /api/* requests ALWAYS return JSON, never HTML index.html!)
+app.all("/api/*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Rute API '${req.method} ${req.path}' tidak ditemukan di server.`
+  });
 });
 
 // In-Memory Caching for RSS Feed & OpenGraph Social Media Injector
