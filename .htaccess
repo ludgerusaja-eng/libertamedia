@@ -10,6 +10,10 @@
   RewriteEngine On
   RewriteBase /
 
+  # 0. EXCLUDE WordPress CMS subfolder entirely from Node.js Passenger rewrite
+  RewriteCond %{REQUEST_URI} ^/cms [NC]
+  RewriteRule ^ - [L]
+
   # 1. Allow direct access to real existing static files and directories (assets, uploads, images)
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
