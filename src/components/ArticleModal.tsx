@@ -147,20 +147,53 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
   };
 
   const handleCopyLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url);
+    const articleUrl = `${window.location.origin}/berita/${article.slug || article.id}`;
+    navigator.clipboard.writeText(articleUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  const getShareUrl = () => {
+    return `${window.location.origin}/berita/${article.slug || article.id}`;
+  };
+
   const handleShareWhatsApp = () => {
-    const text = encodeURIComponent(`*${article.title}*\n\nBaca artikel selengkapnya di libertamedia.com - Media Untuk Semua:\n${window.location.href}`);
+    const text = encodeURIComponent(`*${article.title}*\n\n${article.summary || ''}\n\nBaca selengkapnya di libertamedia.com:\n${getShareUrl()}`);
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   };
 
+  const handleShareFacebook = () => {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`, '_blank');
+  };
+
   const handleShareTwitter = () => {
-    const text = encodeURIComponent(`"${article.title}" via @libertamedia_ #LibertaMedia`);
-    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(window.location.href)}`, '_blank');
+    const text = encodeURIComponent(`"${article.title}" via @libertamedia`);
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(getShareUrl())}`, '_blank');
+  };
+
+  const handleShareTelegram = () => {
+    const text = encodeURIComponent(`*${article.title}*\n${article.summary || ''}`);
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(getShareUrl())}&text=${text}`, '_blank');
+  };
+
+  const handleShareLinkedIn = () => {
+    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(getShareUrl())}`, '_blank');
+  };
+
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: article.title,
+          text: article.summary || article.title,
+          url: getShareUrl(),
+        });
+      } catch (err) {
+        handleCopyLink();
+      }
+    } else {
+      handleCopyLink();
+    }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -363,24 +396,56 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
                 </div>
               </div>
 
-              {/* Social Share Buttons */}
-              <div className="flex items-center gap-1.5">
+              {/* Complete Universal Social Share Toolbar */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-slate-400 font-semibold mr-1 hidden sm:inline">Bagikan:</span>
                 <button
                   onClick={handleShareWhatsApp}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm transition-all"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
                   title="Bagikan ke WhatsApp"
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">WhatsApp</span>
+                  <span>WhatsApp</span>
+                </button>
+                <button
+                  onClick={handleShareFacebook}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                  title="Bagikan ke Facebook"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Facebook</span>
                 </button>
                 <button
                   onClick={handleShareTwitter}
-                  className="bg-slate-900 hover:bg-black text-white p-2 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm transition-all"
-                  title="Bagikan ke X"
+                  className="bg-slate-900 hover:bg-black text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                  title="Bagikan ke X (Twitter)"
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Bagikan ke X</span>
+                  <span className="hidden sm:inline">X</span>
+                </button>
+                <button
+                  onClick={handleShareTelegram}
+                  className="bg-sky-500 hover:bg-sky-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                  title="Bagikan ke Telegram"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Telegram</span>
+                </button>
+                <button
+                  onClick={handleShareLinkedIn}
+                  className="bg-blue-800 hover:bg-blue-900 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                  title="Bagikan ke LinkedIn"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">LinkedIn</span>
+                </button>
+                <button
+                  onClick={handleNativeShare}
+                  className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                  title="Bagikan ke Aplikasi Lain"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Lainnya</span>
                 </button>
               </div>
             </div>
