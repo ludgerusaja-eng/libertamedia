@@ -9,7 +9,8 @@ import {
   Share2, 
   ExternalLink,
   Flame,
-  Check
+  Check,
+  Info
 } from 'lucide-react';
 import { CategoryType } from '../types';
 
@@ -201,53 +202,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Internasional</span>
             </button>
 
-            {/* Pillar 4: libertamedia Platform */}
+            {/* Pillar 5: Tentang Kami */}
             <div 
               className="relative group"
-              onMouseEnter={() => setActiveDropdown('platform')}
+              onMouseEnter={() => setActiveDropdown('about')}
               onMouseLeave={() => setActiveDropdown(null)}
             >
               <button
-                id="nav-menu-platform"
+                id="nav-menu-about"
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-bold text-sm transition-colors ${
-                  activeDropdown === 'platform'
+                  activeDropdown === 'about'
                     ? 'text-[#E5252A] bg-red-50'
                     : 'text-slate-800 hover:text-[#E5252A] hover:bg-slate-50'
                 }`}
               >
-                <Share2 className="w-4 h-4 text-[#E5252A]" />
-                <span>libertamedia platform</span>
+                <Info className="w-4 h-4 text-[#E5252A]" />
+                <span>Tentang Kami</span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-500 group-hover:text-[#E5252A] transition-transform duration-200 group-hover:rotate-180" />
               </button>
 
-              {/* Platform Dropdown */}
-              <div className="absolute top-full right-0 w-80 bg-white rounded-b-xl shadow-xl border-t-2 border-[#E5252A] border-x border-b border-slate-200 py-3 px-3 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200 z-50">
-                <div className="px-2 pb-2 mb-2 border-b border-slate-100">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Kanal Media Sosial Resmi</p>
-                  <p className="text-[11px] text-slate-500">Ikuti konten multimedia harian kami</p>
+              {/* Tentang Kami Dropdown Card */}
+              <div className="absolute top-full right-0 w-80 bg-white rounded-b-xl shadow-xl border-t-2 border-[#E5252A] border-x border-b border-slate-200 p-4 hidden group-hover:block animate-in fade-in slide-in-from-top-1 duration-200 z-50">
+                <div className="flex items-center gap-1.5 mb-2 text-[#E5252A]">
+                  <Info className="w-4 h-4" />
+                  <span className="font-extrabold text-xs uppercase tracking-wider">Tentang Kami</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {socialPlatforms.map((soc) => (
-                    <button
-                      key={soc.name}
-                      onClick={() => onOpenSocialModal(soc.name)}
-                      className="p-2 rounded-lg hover:bg-slate-50 border border-slate-100 text-left transition-all group/soc"
-                    >
-                      <div className="truncate">
-                        <div className="font-bold text-xs text-slate-900 group-hover/soc:text-[#E5252A] truncate">
-                          {soc.name}
-                        </div>
-                        <div className="text-[10px] text-slate-400 truncate">{soc.handle}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs text-slate-600 leading-relaxed font-normal">
+                  <strong>libertamedia.com</strong> adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat "Media Untuk Semua".
+                </p>
               </div>
             </div>
 
           </nav>
-
-
 
           {/* Mobile menu hamburger toggle */}
           <div className="flex md:hidden items-center justify-end w-full">
@@ -298,7 +284,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-1.5 text-[#E5252A]">
                 <Newspaper className="w-4 h-4" />
-                <span>1. News (Kanal Berita)</span>
+                <span>News (Kanal Berita)</span>
               </div>
               <div className="grid grid-cols-2 gap-1 pl-2">
                 {newsSubcategories.map((sub) => (
@@ -321,7 +307,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="border-t border-slate-100 pt-3">
               <div className="font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-1.5 text-[#E5252A]">
                 <BookOpen className="w-4 h-4" />
-                <span>2. liberta cerita</span>
+                <span>liberta cerita</span>
               </div>
               <div className="grid grid-cols-2 gap-1 pl-2">
                 {ceritaSubcategories.map((sub) => (
@@ -348,7 +334,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <div className="flex items-center gap-1.5 text-[#E5252A]">
                   <Globe className="w-4 h-4" />
-                  <span>3. Kabar Internasional</span>
+                  <span>Kabar Internasional</span>
                 </div>
                 <span className="text-xs text-slate-400">Buka →</span>
               </button>
@@ -358,7 +344,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="border-t border-slate-100 pt-3">
               <div className="font-extrabold text-sm text-slate-900 mb-2 flex items-center gap-1.5 text-[#E5252A]">
                 <Share2 className="w-4 h-4" />
-                <span>4. Media Sosial & Platform</span>
+                <span>Media Sosial & Platform</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {socialPlatforms.map((soc) => (
@@ -374,6 +360,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Tentang Kami Section */}
+            <div className="border-t border-slate-100 pt-3 space-y-1.5">
+              <div className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 text-[#E5252A]">
+                <Info className="w-4 h-4" />
+                <span>Tentang Kami</span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <strong>libertamedia.com</strong> adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat "Media Untuk Semua".
+              </p>
             </div>
 
           </div>
