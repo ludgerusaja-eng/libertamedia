@@ -470,7 +470,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="text" 
                     value={settings.siteName}
                     onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                   />
                 </div>
                 <div>
@@ -479,7 +479,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="text" 
                     value={settings.siteTagline}
                     onChange={(e) => setSettings({ ...settings, siteTagline: e.target.value })}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                   />
                 </div>
                 <div>
@@ -488,7 +488,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="text" 
                     value={settings.footerText}
                     onChange={(e) => setSettings({ ...settings, footerText: e.target.value })}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                   />
                 </div>
               </div>
@@ -506,7 +506,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         socialLinks: { ...settings.socialLinks, instagram: e.target.value }
                       })}
                       placeholder="https://instagram.com/..."
-                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                     />
                   </div>
                   <div>
@@ -519,7 +519,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         socialLinks: { ...settings.socialLinks, twitter: e.target.value }
                       })}
                       placeholder="https://x.com/..."
-                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                     />
                   </div>
                   <div>
@@ -532,7 +532,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         socialLinks: { ...settings.socialLinks, youtube: e.target.value }
                       })}
                       placeholder="https://youtube.com/@..."
-                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                     />
                   </div>
                   <div>
@@ -545,7 +545,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         socialLinks: { ...settings.socialLinks, facebook: e.target.value }
                       })}
                       placeholder="https://facebook.com/..."
-                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs"
                     />
                   </div>
                 </div>
@@ -600,7 +600,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       monetization: { ...settings.monetization, headerBannerHtml: e.target.value }
                     })}
                     placeholder="<a href='...'><img src='...' /></a> atau kode AdSense..."
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                    className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs font-mono"
                   />
                 </div>
                 <div>
@@ -613,7 +613,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       monetization: { ...settings.monetization, inArticleAdHtml: e.target.value }
                     })}
                     placeholder="<div class='ad-unit'>...</div>"
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                    className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs font-mono"
                   />
                 </div>
                 <div>
@@ -626,7 +626,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       monetization: { ...settings.monetization, googleAnalyticsId: e.target.value }
                     })}
                     placeholder="G-XXXXXXXXXX"
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                    className="w-full text-xs p-3 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-[#E5252A] focus:outline-none shadow-xs font-mono"
                   />
                 </div>
               </div>

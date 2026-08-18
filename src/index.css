@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+/* Force crystal-clear high contrast input text across all browsers & OS */
+input, textarea, select {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #0f172a !important;
+  opacity: 1 !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+  opacity: 1 !important;
+}
