@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/server.cjs && node -e \"const fs=require('fs'); let h=fs.readFileSync('dist/index.html','utf8'); const m=h.match(/<script type=\\\"module\\\" crossorigin src=\\\"([^\\\"]+)\\\"><\\/script>/); if(m){ h=h.replace(m[0],''); h=h.replace('<div id=\\\"root\\\"></div>', '<div id=\\\"root\\\"></div>\\n    <script src=\\\"' + m[1] + '\\\"></script>'); fs.writeFileSync('dist/index.html', h); }\"",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
