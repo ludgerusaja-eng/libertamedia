@@ -47,6 +47,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [loading, setLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   
   // New & Edit Article Form state
   const [isCreatingArticle, setIsCreatingArticle] = useState(false);
