@@ -9,7 +9,60 @@ export interface ServerStats {
   serverTime: string;
 }
 
+let tokenCache: string | null = typeof window !== 'undefined' ? sessionStorage.getItem('liberta_admin_token') : null;
+
 export const api = {
+  setAuthToken(token: string | null) {
+    tokenCache = token;
+    if (token) {
+      sessionStorage.setItem('liberta_admin_token', token);
+    } else {
+      sessionStorage.removeItem('liberta_admin_token');
+    }
+  },
+
+  getAuthToken(): string | null {
+    if (!tokenCache && typeof window !== 'undefined') {
+      tokenCache = sessionStorage.getItem('liberta_admin_token');
+    }
+    return tokenCache;
+  },
+
+  getAuthHeaders(): Record<string, string> {
+    const token = this.getAuthToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-Admin-Token'] = token;
+    }
+    return headers;
+  },
+
+  // Auth: Login with password
+  async login(password: string) {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || 'Password Admin tidak valid');
+    }
+    const data = await res.json();
+    if (data.token) {
+      this.setAuthToken(data.token);
+    }
+    return data;
+  },
+
+  // Auth: Logout
+  async logout() {
+    const headers = this.getAuthHeaders();
+    await fetch('/api/auth/logout', { method: 'POST', headers }).catch(() => {});
+    this.setAuthToken(null);
+  },
+
   // 1. Fetch articles
   async getArticles(params?: { category?: CategoryType; pillar?: string; tag?: string; q?: string }): Promise<Article[]> {
     try {
@@ -46,7 +99,7 @@ export const api = {
   async createArticle(articleData: Partial<Article>): Promise<Article> {
     const res = await fetch('/api/articles', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(articleData),
     });
     if (!res.ok) {
@@ -61,7 +114,7 @@ export const api = {
   async updateArticle(id: string, articleData: Partial<Article>): Promise<Article> {
     const res = await fetch(`/api/articles/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(articleData),
     });
     if (!res.ok) throw new Error('Gagal memperbarui artikel');
@@ -73,6 +126,7 @@ export const api = {
   async deleteArticle(id: string): Promise<boolean> {
     const res = await fetch(`/api/articles/${id}`, {
       method: 'DELETE',
+      headers: this.getAuthHeaders(),
     });
     return res.ok;
   },
@@ -133,6 +187,7 @@ export const api = {
   async publishSubmission(submissionId: string): Promise<Article> {
     const res = await fetch(`/api/submissions/${submissionId}/publish`, {
       method: 'POST',
+      headers: this.getAuthHeaders(),
     });
     if (!res.ok) throw new Error('Gagal menerbitkan naskah warga');
     const data = await res.json();
@@ -142,6 +197,7 @@ export const api = {
   async deleteSubmission(submissionId: string): Promise<boolean> {
     const res = await fetch(`/api/submissions/${submissionId}`, {
       method: 'DELETE',
+      headers: this.getAuthHeaders(),
     });
     return res.ok;
   },

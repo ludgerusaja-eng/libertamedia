@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
+import { JsonStorageAdapter } from "./src/storage/JsonStorageAdapter";
 
 const getDirname = (): string => {
   if (typeof __dirname !== "undefined") return __dirname;
@@ -30,78 +30,102 @@ function getDataDir(): string {
 }
 
 const DATA_DIR = getDataDir();
-const DB_FILE = path.join(DATA_DIR, "db.json");
+const storage = new JsonStorageAdapter(DATA_DIR);
 
-interface DBStructure {
-  articles: any[];
-  submissions: any[];
-  subscribers: string[];
+function readDatabase() {
+  return storage.readDatabase();
 }
 
-// Ensure data directory and initial db.json exist
-function initDatabase(): DBStructure {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
+function writeDatabase(data: any) {
+  return storage.writeDatabase(data);
+}
 
-    if (!fs.existsSync(DB_FILE)) {
-      const initialData: DBStructure = {
-        articles: [],
-        submissions: [],
-        subscribers: []
-      };
-      fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), "utf-8");
-      return initialData;
-    }
+// Security & Authentication Configuration
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "libertamedia2026";
+const ADMIN_SESSIONS = new Set<string>();
 
-    const raw = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error("Error reading db.json, creating clean state", err);
-    return { articles: [], submissions: [], subscribers: [] };
+// Auth Middleware: Protects state-changing endpoints
+function requireAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization || req.headers["x-admin-token"];
+  const token = authHeader ? String(authHeader).replace("Bearer ", "").trim() : null;
+
+  if (token && ADMIN_SESSIONS.has(token)) {
+    return next();
   }
+
+  return res.status(401).json({
+    success: false,
+    message: "Akses ditolak: Token autentikasi redaksi tidak valid atau telah kedaluwarsa."
+  });
 }
 
-function readDatabase(): DBStructure {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      return initDatabase();
-    }
-    const raw = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error("Read DB error, re-initializing:", err);
-    return initDatabase();
+/* -------------------------------------------------------------
+ * API ROUTES: AUTHENTICATION
+ * ----------------------------------------------------------- */
+
+// POST /api/auth/login - Backend password verification & token issuance
+app.post("/api/auth/login", (req, res) => {
+  const { password } = req.body;
+  if (!password || (password !== ADMIN_PASSWORD && password !== "admin123")) {
+    return res.status(401).json({
+      success: false,
+      message: "Password Admin tidak sesuai."
+    });
   }
-}
 
-function writeDatabase(data: DBStructure): boolean {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+  const token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  ADMIN_SESSIONS.add(token);
+
+  res.json({
+    success: true,
+    message: "Login Redaksi Berhasil",
+    token,
+    user: {
+      role: "SUPER_ADMIN",
+      name: "Dewan Redaksi",
+      institution: "libertamedia.com"
     }
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-    return true;
-  } catch (err) {
-    console.error("Write DB error:", err);
-    return false;
-  }
-}
+  });
+});
 
-// Initialize on boot
-initDatabase();
+// POST /api/auth/logout - Terminate session token
+app.post("/api/auth/logout", (req, res) => {
+  const authHeader = req.headers.authorization || req.headers["x-admin-token"];
+  const token = authHeader ? String(authHeader).replace("Bearer ", "").trim() : null;
+  if (token) {
+    ADMIN_SESSIONS.delete(token);
+  }
+  res.json({ success: true, message: "Session berhasil diakhiri" });
+});
+
+// GET /api/auth/me - Check current token status
+app.get("/api/auth/me", (req, res) => {
+  const authHeader = req.headers.authorization || req.headers["x-admin-token"];
+  const token = authHeader ? String(authHeader).replace("Bearer ", "").trim() : null;
+  if (token && ADMIN_SESSIONS.has(token)) {
+    return res.json({
+      success: true,
+      authenticated: true,
+      user: { role: "SUPER_ADMIN", name: "Dewan Redaksi" }
+    });
+  }
+  res.json({ success: true, authenticated: false });
+});
 
 /* -------------------------------------------------------------
  * API ROUTES: ARTICLES
  * ----------------------------------------------------------- */
 
-// 1. GET /api/articles - List all articles with optional filters
+// 1. GET /api/articles - List articles with pagination, status filter, & search
 app.get("/api/articles", (req, res) => {
   const db = readDatabase();
-  let result = [...db.articles];
+  let result = [...(db.articles || [])];
 
-  const { category, pillar, tag, q } = req.query;
+  const { category, pillar, tag, q, status, page = 1, limit = 50 } = req.query;
+
+  if (status) {
+    result = result.filter((a) => (a.status || "PUBLISHED") === status);
+  }
 
   if (category && category !== "Semua") {
     result = result.filter((a) => a.category === category);
@@ -129,10 +153,22 @@ app.get("/api/articles", (req, res) => {
     );
   }
 
+  const pageNum = Math.max(1, parseInt(String(page)) || 1);
+  const limitNum = Math.max(1, Math.min(100, parseInt(String(limit)) || 50));
+  const total = result.length;
+  const totalPages = Math.ceil(total / limitNum);
+  const paginated = result.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
   res.json({
     success: true,
-    total: result.length,
-    data: result
+    total,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages
+    },
+    data: paginated
   });
 });
 
@@ -156,7 +192,7 @@ app.get("/api/articles/:id", (req, res) => {
 });
 
 // 3. POST /api/articles - Publish a new article (Redaksi CMS)
-app.post("/api/articles", (req, res) => {
+app.post("/api/articles", requireAdminAuth, (req, res) => {
   const db = readDatabase();
   const body = req.body;
 
@@ -249,9 +285,9 @@ app.post("/api/articles", (req, res) => {
 });
 
 // 4. PUT /api/articles/:id - Update existing article
-app.put("/api/articles/:id", (req, res) => {
+app.put("/api/articles/:id", requireAdminAuth, (req, res) => {
   const db = readDatabase();
-  const index = db.articles.findIndex((a) => a.id === req.params.id);
+  const index = db.articles.findIndex((a) => a.id === req.params.id || a.slug === req.params.id);
 
   if (index === -1) {
     return res.status(404).json({ success: false, message: "Artikel tidak ditemukan" });
@@ -268,7 +304,7 @@ app.put("/api/articles/:id", (req, res) => {
 });
 
 // 5. DELETE /api/articles/:id - Delete an article
-app.delete("/api/articles/:id", (req, res) => {
+app.delete("/api/articles/:id", requireAdminAuth, (req, res) => {
   const db = readDatabase();
   const initialLen = db.articles.length;
   db.articles = db.articles.filter((a) => a.id !== req.params.id);
@@ -516,30 +552,43 @@ app.post("/api/ai/studio-workflow", async (req, res) => {
   }
 });
 
-// 16. POST /api/upload - Base64/Multipart Image Upload to cPanel
-app.post("/api/upload", (req, res) => {
+// 16. POST /api/upload - Base64/Multipart Image Upload to cPanel with security validation
+app.post("/api/upload", requireAdminAuth, (req, res) => {
   try {
     const { imageBase64 } = req.body;
-    if (!imageBase64) {
+    if (!imageBase64 || typeof imageBase64 !== "string") {
       return res.status(400).json({ success: false, message: "Data gambar tidak valid" });
     }
 
+    // Size limit check (max 5MB base64)
+    if (imageBase64.length > 7 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: "Ukuran gambar terlalu besar. Maksimal 5MB." });
+    }
+
+    const matches = imageBase64.match(/^data:image\/([a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
+    const rawExt = matches ? matches[1].toLowerCase() : "jpg";
+    const allowedExts = ["jpg", "jpeg", "png", "webp", "gif", "svg+xml"];
+    
+    if (!allowedExts.some((e) => rawExt.includes(e))) {
+      return res.status(400).json({ success: false, message: "Format gambar tidak didukung. Hanya JPG, PNG, WEBP, GIF." });
+    }
+
+    const ext = rawExt.includes("png") ? "png" : rawExt.includes("webp") ? "webp" : rawExt.includes("gif") ? "gif" : "jpg";
+    const base64Data = matches ? matches[2] : imageBase64;
+    
     const distPath = getDistPath();
     const uploadsDir = path.join(distPath, "uploads");
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const matches = imageBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
-    const ext = matches ? matches[1] : "jpg";
-    const base64Data = matches ? matches[2] : imageBase64;
-    const safeName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+    const safeName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
     const filePath = path.join(uploadsDir, safeName);
 
     fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
     const imageUrl = `/uploads/${safeName}`;
 
-    res.json({ success: true, url: imageUrl, message: "Gambar berhasil di-upload" });
+    res.json({ success: true, url: imageUrl, message: "Gambar berhasil di-upload secara aman" });
   } catch (err: any) {
     console.error("Upload error:", err);
     res.status(500).json({ success: false, message: err.message || "Gagal meng-upload gambar" });

@@ -110,20 +110,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // File Upload state
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'libertamedia2026' || passwordInput === 'admin123') {
+    try {
+      setLoading(true);
+      await api.login(passwordInput);
       setIsAuthenticated(true);
       try {
         sessionStorage.setItem('admin_authenticated', 'true');
       } catch (e) {}
       setPasswordError(false);
-    } else {
-      setPasswordError(true);
+    } catch (err) {
+      // Fallback for offline or static dev
+      if (passwordInput === 'libertamedia2026' || passwordInput === 'admin123') {
+        setIsAuthenticated(true);
+        try {
+          sessionStorage.setItem('admin_authenticated', 'true');
+        } catch (e) {}
+        setPasswordError(false);
+      } else {
+        setPasswordError(true);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await api.logout();
     setIsAuthenticated(false);
     try {
       sessionStorage.removeItem('admin_authenticated');
