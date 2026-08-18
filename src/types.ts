@@ -95,3 +95,48 @@ export interface CitizenSubmission {
   content: string;
   submittedAt: string;
 }
+
+export interface SiteSettings {
+  siteName: string;
+  tagline: string;
+  description: string;
+  defaultOgImage: string;
+  copyrightText: string;
+  socialLinks: {
+    instagram: string;
+    twitter: string;
+    youtube: string;
+    tiktok: string;
+    facebook: string;
+  };
+  sectionToggles: {
+    breakingNews: boolean;
+    heroSlider: boolean;
+    editorsPicks: boolean;
+    citizenVoice: boolean;
+    multimedia: boolean;
+    newsletter: boolean;
+  };
+  cardDisplayStyle: 'grid' | 'list';
+  customCategories: string[];
+  adSlots: {
+    headerBanner: string;
+    inArticleBanner: string;
+    mobileStickyBottom: string;
+  };
+  analyticsScripts: {
+    ga4Id: string;
+    searchConsoleTag: string;
+    facebookPixel: string;
+    customHeadScript: string;
+  };
+}
+
+export interface StaticPage {
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  updatedAt: string;
+}
+

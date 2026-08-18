@@ -251,4 +251,74 @@ export const api = {
       reader.readAsDataURL(file);
     });
   },
+
+  // 12. Site Settings API (Blogger / WordPress CMS Suite)
+  async getSettings(): Promise<any> {
+    try {
+      const res = await fetch('/api/settings');
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.data;
+    } catch (err) {
+      console.warn('API getSettings fallback:', err);
+      return null;
+    }
+  },
+
+  async saveSettings(settingsData: any): Promise<any> {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(settingsData),
+    });
+    if (!res.ok) throw new Error('Gagal menyimpan pengaturan website');
+    const data = await res.json();
+    return data.data;
+  },
+
+  // 13. Static Pages API (CMS Pages)
+  async getPages(): Promise<any[]> {
+    try {
+      const res = await fetch('/api/pages');
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.data || [];
+    } catch (err) {
+      console.warn('API getPages fallback:', err);
+      return [];
+    }
+  },
+
+  async getPageBySlug(slug: string): Promise<any | null> {
+    try {
+      const res = await fetch(`/api/pages/${slug}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.data;
+    } catch (err) {
+      console.warn('API getPageBySlug fallback:', err);
+      return null;
+    }
+  },
+
+  async savePage(pageData: { id?: string; slug: string; title: string; content: string }): Promise<any> {
+    const method = pageData.id ? 'PUT' : 'POST';
+    const url = pageData.id ? `/api/pages/${pageData.id}` : '/api/pages';
+    const res = await fetch(url, {
+      method,
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(pageData),
+    });
+    if (!res.ok) throw new Error('Gagal menyimpan halaman statis');
+    const data = await res.json();
+    return data.data;
+  },
+
+  async deletePage(id: string): Promise<boolean> {
+    const res = await fetch(`/api/pages/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    return res.ok;
+  },
 };

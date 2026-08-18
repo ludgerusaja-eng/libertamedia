@@ -6,12 +6,14 @@ interface FooterProps {
   onSelectCategory: (category: CategoryType) => void;
   onOpenSubmitStory: () => void;
   onOpenSocialModal: (platform: string) => void;
+  onOpenPage?: (slug: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onSelectCategory,
   onOpenSubmitStory,
   onOpenSocialModal,
+  onOpenPage
 }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -117,18 +119,6 @@ export const Footer: React.FC<FooterProps> = ({
               >
                 • Cerita Inspiratif
               </button>
-              <button
-                onClick={() => onSelectCategory('Internasional')}
-                className="text-left hover:text-white transition-colors"
-              >
-                • Internasional
-              </button>
-              <button
-                onClick={() => onSelectCategory('Sosial Budaya')}
-                className="text-left hover:text-white transition-colors"
-              >
-                • Sosial Budaya
-              </button>
             </div>
 
             <div className="pt-2">
@@ -141,21 +131,50 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          {/* Col 4: Kontak Redaksi */}
+          {/* Col 4: Halaman Statis CMS & Kontak */}
           <div className="space-y-3">
             <h4 className="text-white font-extrabold text-sm relative pb-2 after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-8 after:h-0.5 after:bg-[#E5252A]">
-              Kontak Redaksi
+              Informasi & Pedoman Siber
             </h4>
-            <ul className="space-y-2 text-xs">
-              <li className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-[#E5252A] flex-shrink-0" />
-                <span>redaksi@libertamedia.com</span>
+            <ul className="space-y-1.5 text-xs">
+              <li>
+                <a
+                  href="/p/pedoman-media-siber"
+                  onClick={(e) => {
+                    if (onOpenPage) { e.preventDefault(); onOpenPage('pedoman-media-siber'); }
+                  }}
+                  className="hover:text-white transition-colors flex items-center gap-1"
+                >
+                  • Pedoman Media Siber
+                </a>
               </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-[#E5252A] flex-shrink-0" />
-                <span>+62 (21) 555-0199 / +62 812-8888-2045</span>
+              <li>
+                <a
+                  href="/p/redaksi"
+                  onClick={(e) => {
+                    if (onOpenPage) { e.preventDefault(); onOpenPage('redaksi'); }
+                  }}
+                  className="hover:text-white transition-colors flex items-center gap-1"
+                >
+                  • Susunan Redaksi
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/p/kontak-hak-jawab"
+                  onClick={(e) => {
+                    if (onOpenPage) { e.preventDefault(); onOpenPage('kontak-hak-jawab'); }
+                  }}
+                  className="hover:text-white transition-colors flex items-center gap-1"
+                >
+                  • Kontak & Hak Jawab
+                </a>
               </li>
             </ul>
+
+            <div className="pt-2 border-t border-slate-800 space-y-1 text-[11px]">
+              <p className="text-slate-400">Email: redaksi@libertamedia.com</p>
+            </div>
           </div>
 
         </div>

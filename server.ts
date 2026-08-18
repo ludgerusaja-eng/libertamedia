@@ -619,7 +619,7 @@ app.post("/api/submissions/:id/publish", (req, res) => {
 });
 
 // 11. DELETE /api/submissions/:id - Reject / delete submission
-app.delete("/api/submissions/:id", (req, res) => {
+app.delete("/api/submissions/:id", requireAdminAuth, (req, res) => {
   const db = readDatabase();
   const initLen = db.submissions.length;
   db.submissions = db.submissions.filter((s) => s.id !== req.params.id);
@@ -630,6 +630,175 @@ app.delete("/api/submissions/:id", (req, res) => {
 
   writeDatabase(db);
   res.json({ success: true, message: "Naskah berhasil dihapus dari inbox redaksi" });
+});
+
+/* -------------------------------------------------------------
+ * API ROUTES: SITE SETTINGS & STATIC PAGES CMS (WORDPRESS SUITE)
+ * ----------------------------------------------------------- */
+
+const DEFAULT_SITE_SETTINGS = {
+  siteName: "LIBERTAMEDIA",
+  tagline: "Media Untuk Semua",
+  description: "Media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat Media Untuk Semua.",
+  defaultOgImage: "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=1200&auto=format&fit=crop",
+  copyrightText: "© 2026 libertamedia.com. Hak Cipta Dilindungi Undang-Undang.",
+  socialLinks: {
+    instagram: "https://instagram.com/libertamedia",
+    twitter: "https://x.com/libertamedia",
+    youtube: "https://youtube.com/@libertamedia",
+    tiktok: "https://tiktok.com/@libertamedia",
+    facebook: "https://facebook.com/libertamedia"
+  },
+  sectionToggles: {
+    breakingNews: true,
+    heroSlider: true,
+    editorsPicks: true,
+    citizenVoice: true,
+    multimedia: true,
+    newsletter: true
+  },
+  cardDisplayStyle: "grid",
+  customCategories: ["Pemerintahan", "Politik", "Mahasiswa", "Sosial Budaya", "Ekonomi", "Olahraga & Seni", "Organisasi & Komunitas", "Opini", "Internasional"],
+  adSlots: {
+    headerBanner: "",
+    inArticleBanner: "",
+    mobileStickyBottom: ""
+  },
+  analyticsScripts: {
+    ga4Id: "",
+    searchConsoleTag: "",
+    facebookPixel: "",
+    customHeadScript: ""
+  }
+};
+
+const DEFAULT_STATIC_PAGES = [
+  {
+    id: "pedoman-media-siber",
+    slug: "pedoman-media-siber",
+    title: "Pedoman Pemberitaan Media Siber",
+    content: "Kemerdekaan berpendapat, kemerdekaan berekspresi, dan kemerdekaan pers adalah hak asasi manusia yang dilindungi Pancasila, Undang-Undang Dasar 1945, dan Deklarasi Universal Hak Asasi Manusia PBB.\n\nlibertamedia.com tunduk pada Pedoman Pemberitaan Media Siber Dewan Pers Indonesia.\n\n1. Ruang Lingkup\nMedia Siber adalah media yang menggunakan media internet dalam melaksanakan kegiatan jurnalistik.\n\n2. Verifikasi dan Keseimbangan Berita\nSetiap berita harus melalui proses verifikasi. Berita yang dapat merugikan pihak lain memerlukan verifikasi pada berita yang sama untuk memenuhi prinsip keadilan dan keberimbangan.",
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: "redaksi",
+    slug: "redaksi",
+    title: "Susunan Redaksi & Manajemen",
+    content: "Pimpinan Redaksi / Penanggung Jawab:\nDewan Redaksi Liberta Media\n\nRedaktur Pelaksana:\nTim Jurnalis & Editor Liberta\n\nRuang Dialektika & Suara Warga:\nPlatform Opini Publik & Aspirasi Mahasiswa\n\nAlamat Redaksi & Kontak:\nJakarta / Indonesia\nEmail: redaksi@libertamedia.com",
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: "kontak-hak-jawab",
+    slug: "kontak-hak-jawab",
+    title: "Kontak & Hak Jawab",
+    content: "Berdasarkan UU No. 40 Tahun 1999 tentang Pers, libertamedia.com melayani Hak Jawab dan Hak Koreksi dari masyarakat.\n\nBagi pihak yang merasa dirugikan oleh pemberitaan libertamedia.com, silakan menyampaikan Hak Jawab melalui email:\nredaksi@libertamedia.com dengan subjek [HAK JAWAB].",
+    updatedAt: new Date().toISOString()
+  }
+];
+
+let SETTINGS_CACHE: { data: any; timestamp: number } | null = null;
+
+// GET /api/settings (Public, cached 5-min)
+app.get("/api/settings", (req, res) => {
+  const now = Date.now();
+  if (SETTINGS_CACHE && now - SETTINGS_CACHE.timestamp < 5 * 60 * 1000) {
+    return res.json({ success: true, data: SETTINGS_CACHE.data });
+  }
+
+  const db = readDatabase();
+  const settings = db.settings || DEFAULT_SITE_SETTINGS;
+  SETTINGS_CACHE = { data: settings, timestamp: now };
+  res.json({ success: true, data: settings });
+});
+
+// POST /api/settings (Admin protected)
+app.post("/api/settings", requireAdminAuth, (req, res) => {
+  const db = readDatabase();
+  db.settings = { ...DEFAULT_SITE_SETTINGS, ...db.settings, ...req.body };
+  writeDatabase(db);
+  SETTINGS_CACHE = { data: db.settings, timestamp: Date.now() };
+  res.json({ success: true, message: "Pengaturan website berhasil diperbarui", data: db.settings });
+});
+
+// GET /api/pages (Public)
+app.get("/api/pages", (req, res) => {
+  const db = readDatabase();
+  const pages = db.pages && db.pages.length > 0 ? db.pages : DEFAULT_STATIC_PAGES;
+  res.json({ success: true, total: pages.length, data: pages });
+});
+
+// GET /api/pages/:slug (Public)
+app.get("/api/pages/:slug", (req, res) => {
+  const db = readDatabase();
+  const pages = db.pages && db.pages.length > 0 ? db.pages : DEFAULT_STATIC_PAGES;
+  const page = pages.find((p) => p.slug === req.params.slug || p.id === req.params.slug);
+
+  if (!page) {
+    return res.status(404).json({ success: false, message: "Halaman statis tidak ditemukan" });
+  }
+
+  res.json({ success: true, data: page });
+});
+
+// POST /api/pages (Admin protected)
+app.post("/api/pages", requireAdminAuth, (req, res) => {
+  const db = readDatabase();
+  if (!db.pages) db.pages = [...DEFAULT_STATIC_PAGES];
+
+  const { slug, title, content } = req.body;
+  if (!slug || !title || !content) {
+    return res.status(400).json({ success: false, message: "Slug, judul, dan isi halaman wajib diisi" });
+  }
+
+  const newPage = {
+    id: `page-${Date.now()}`,
+    slug: slug.toLowerCase().replace(/[^\w-]/g, ""),
+    title: sanitizeText(title.trim()),
+    content: sanitizeText(content.trim()),
+    updatedAt: new Date().toISOString()
+  };
+
+  db.pages.unshift(newPage);
+  writeDatabase(db);
+  res.status(201).json({ success: true, message: "Halaman statis baru berhasil dibuat", data: newPage });
+});
+
+// PUT /api/pages/:id (Admin protected)
+app.put("/api/pages/:id", requireAdminAuth, (req, res) => {
+  const db = readDatabase();
+  if (!db.pages) db.pages = [...DEFAULT_STATIC_PAGES];
+
+  const pageIndex = db.pages.findIndex((p) => p.id === req.params.id || p.slug === req.params.id);
+  if (pageIndex === -1) {
+    return res.status(404).json({ success: false, message: "Halaman tidak ditemukan" });
+  }
+
+  const existing = db.pages[pageIndex];
+  const updatedPage = {
+    ...existing,
+    ...req.body,
+    updatedAt: new Date().toISOString()
+  };
+
+  db.pages[pageIndex] = updatedPage;
+  writeDatabase(db);
+  res.json({ success: true, message: "Halaman statis berhasil diperbarui", data: updatedPage });
+});
+
+// DELETE /api/pages/:id (Admin protected)
+app.delete("/api/pages/:id", requireAdminAuth, (req, res) => {
+  const db = readDatabase();
+  if (!db.pages) db.pages = [...DEFAULT_STATIC_PAGES];
+
+  const initLen = db.pages.length;
+  db.pages = db.pages.filter((p) => p.id !== req.params.id && p.slug !== req.params.id);
+
+  if (db.pages.length === initLen) {
+    return res.status(404).json({ success: false, message: "Halaman tidak ditemukan" });
+  }
+
+  writeDatabase(db);
+  res.json({ success: true, message: "Halaman statis berhasil dihapus" });
 });
 
 /* -------------------------------------------------------------
@@ -873,8 +1042,9 @@ app.get("/berita/:id", (req, res) => {
   res.send(html);
 });
 
-// Dynamic SSR Route for Static Tentang Kami Page with AboutPage Schema.org JSON-LD
-app.get("/tentang-kami", (req, res) => {
+// Dynamic SSR Route for Static CMS Pages (/p/:slug) with WebPage Schema.org JSON-LD
+app.get("/p/:slug", (req, res) => {
+  const slug = req.params.slug;
   const distPath = getDistPath();
   const indexPath = path.join(distPath, "index.html");
 
@@ -883,40 +1053,43 @@ app.get("/tentang-kami", (req, res) => {
   }
 
   let html = fs.readFileSync(indexPath, "utf-8");
-  const domain = process.env.APP_URL || "https://libertamedia.com";
-  const title = "Tentang Kami | libertamedia.com";
-  const desc = "libertamedia.com adalah media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat Media Untuk Semua.";
+  const db = readDatabase();
+  const pages = db.pages && db.pages.length > 0 ? db.pages : DEFAULT_STATIC_PAGES;
+  const page = pages.find((p) => p.slug === slug || p.id === slug);
 
-  const aboutSchema = {
-    "@context": "https://schema.org",
-    "@type": "AboutPage",
-    "name": title,
-    "description": desc,
-    "url": `${domain}/tentang-kami`,
-    "publisher": {
-      "@type": "NewsMediaOrganization",
-      "name": "libertamedia",
-      "url": domain,
-      "logo": {
-        "@type": "ImageObject",
-        "url": `${domain}/uploads/logo.png`
+  if (page) {
+    const domain = process.env.APP_URL || "https://libertamedia.com";
+    const title = `${page.title} | libertamedia.com`;
+    const desc = page.content.substring(0, 160).replace(/\s+/g, " ");
+
+    const pageSchema = {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": page.title,
+      "description": desc,
+      "url": `${domain}/p/${page.slug}`,
+      "publisher": {
+        "@type": "NewsMediaOrganization",
+        "name": "libertamedia",
+        "url": domain
       }
-    }
-  };
+    };
 
-  const metaTags = `
-  <!-- Static About Us Page SSR & Schema.org JSON-LD -->
-  <title>${title}</title>
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="${domain}/tentang-kami" />
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${desc}" />
-  <script type="application/ld+json">
-  ${JSON.stringify(aboutSchema, null, 2)}
-  </script>
-  `;
+    const metaTags = `
+    <!-- Static Page SSR & Schema.org JSON-LD -->
+    <title>${title}</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${domain}/p/${page.slug}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${desc}" />
+    <script type="application/ld+json">
+    ${JSON.stringify(pageSchema, null, 2)}
+    </script>
+    `;
 
-  html = html.replace("</head>", `${metaTags}</head>`);
+    html = html.replace("</head>", `${metaTags}</head>`);
+  }
+
   res.send(html);
 });
 

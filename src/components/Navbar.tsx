@@ -20,6 +20,7 @@ interface NavbarProps {
   onScrollToSection: (sectionId: string) => void;
   onOpenSocialModal: (platformName: string) => void;
   onOpenAbout?: () => void;
+  customCategories?: string[];
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -28,15 +29,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   onScrollToSection,
   onOpenSocialModal,
   onOpenAbout,
+  customCategories
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
   const newsSubcategories: { name: CategoryType; desc: string }[] = [
-    { name: 'Pemerintahan', desc: 'Kebijakan publik & reformasi birokrasi' },
-    { name: 'Politik', desc: 'Dinamika parlemen & demokrasi' },
-    { name: 'Mahasiswa', desc: 'Gerakan kampus, riset & inovasi muda' },
-    { name: 'Sosial Budaya', desc: 'Kesenian, tradisi & dinamika masyarakat' },
+    { name: 'Pemerintahan', desc: 'Kebijakan publik, regulasi & pemilu' },
+    { name: 'Politik', desc: 'Dinamika parpol, parlemen & isu strategis' },
+    { name: 'Mahasiswa', desc: 'Gerakan aksi, riset & prestasi kampus' },
+    { name: 'Sosial Budaya', desc: 'Aspirasi masyarakat & tradisi daerah' },
     { name: 'Ekonomi', desc: 'Bisnis, UMKM, pasar & keuangan' },
     { name: 'Olahraga & Seni', desc: 'Prestasi atlet & kreasi seniman' },
     { name: 'Organisasi & Komunitas', desc: 'Gerakan sosial & aksi kerelawanan' },
@@ -55,17 +57,19 @@ export const Navbar: React.FC<NavbarProps> = ({
     { name: 'TikTok', handle: '@libertamedia', url: 'https://tiktok.com/@libertamedia' },
   ];
 
-  const quickFilterPills: CategoryType[] = [
-    'Pemerintahan',
-    'Politik',
-    'Mahasiswa',
-    'Ekonomi',
-    'Opini',
-    'Cerita Inspiratif',
-    'Internasional',
-    'Sosial Budaya',
-    'Olahraga & Seni'
-  ];
+  const quickFilterPills: CategoryType[] = (customCategories && customCategories.length > 0)
+    ? (customCategories as CategoryType[])
+    : [
+        'Pemerintahan',
+        'Politik',
+        'Mahasiswa',
+        'Ekonomi',
+        'Opini',
+        'Cerita Inspiratif',
+        'Internasional',
+        'Sosial Budaya',
+        'Olahraga & Seni'
+      ];
 
   const handleCategoryClick = (cat: CategoryType) => {
     onSelectCategory(cat);

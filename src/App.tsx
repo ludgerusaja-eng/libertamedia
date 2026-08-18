@@ -90,10 +90,24 @@ export default function App() {
     }
   }, []);
 
+  // Site Settings from Blogger/WordPress Suite
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
+
+  // Fetch live site settings
+  const fetchSiteSettings = useCallback(async () => {
+    try {
+      const data = await api.getSettings();
+      if (data) setSiteSettings(data);
+    } catch (err) {
+      console.warn('Settings fetch error:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchLiveArticles();
     fetchSubmissions();
-  }, [fetchLiveArticles, fetchSubmissions]);
+    fetchSiteSettings();
+  }, [fetchLiveArticles, fetchSubmissions, fetchSiteSettings]);
 
   // Check URL query param ?admin=true or /admin route or secret shortcut (⌘+Shift+A) or direct article link /berita/:id
   useEffect(() => {
@@ -306,6 +320,7 @@ export default function App() {
           onScrollToSection={handleScrollToSection}
           onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
           onOpenAbout={() => setIsAboutOpen(true)}
+          customCategories={siteSettings?.customCategories}
         />
       </div>
 

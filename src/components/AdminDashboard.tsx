@@ -18,14 +18,21 @@ import {
   Check,
   AlertCircle,
   LogOut,
-  RefreshCw,
   Sliders,
-  ExternalLink,
+  Globe,
   Edit,
-  Flame,
-  Globe
+  Code,
+  Palette,
+  Megaphone,
+  BookOpen,
+  Share2,
+  Save,
+  RotateCcw,
+  Youtube,
+  Twitter,
+  ExternalLink
 } from 'lucide-react';
-import { Article, CitizenSubmission, CategoryType } from '../types';
+import { Article, CitizenSubmission, CategoryType, SiteSettings, StaticPage } from '../types';
 import { api } from '../services/api';
 
 interface AdminDashboardProps {
@@ -41,19 +48,67 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   articles,
   onArticlesChange
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'articles' | 'submissions' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'identity' | 'layout' | 'navigation' | 'ads_analytics' | 'pages' | 'articles' | 'submissions' | 'settings'
+  >('overview');
+
   const [submissions, setSubmissions] = useState<CitizenSubmission[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Site Settings State (Blogger/WordPress Suite)
+  const [settings, setSettings] = useState<SiteSettings>({
+    siteName: 'LIBERTAMEDIA',
+    tagline: 'Media Untuk Semua',
+    description: 'Media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat Media Untuk Semua.',
+    defaultOgImage: 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=1200&auto=format&fit=crop',
+    copyrightText: '© 2026 libertamedia.com. Hak Cipta Dilindungi Undang-Undang.',
+    socialLinks: {
+      instagram: 'https://instagram.com/libertamedia',
+      twitter: 'https://x.com/libertamedia',
+      youtube: 'https://youtube.com/@libertamedia',
+      tiktok: 'https://tiktok.com/@libertamedia',
+      facebook: 'https://facebook.com/libertamedia'
+    },
+    sectionToggles: {
+      breakingNews: true,
+      heroSlider: true,
+      editorsPicks: true,
+      citizenVoice: true,
+      multimedia: true,
+      newsletter: true
+    },
+    cardDisplayStyle: 'grid',
+    customCategories: ['Pemerintahan', 'Politik', 'Mahasiswa', 'Sosial Budaya', 'Ekonomi', 'Olahraga & Seni', 'Organisasi & Komunitas', 'Opini', 'Internasional'],
+    adSlots: {
+      headerBanner: '',
+      inArticleBanner: '',
+      mobileStickyBottom: ''
+    },
+    analyticsScripts: {
+      ga4Id: '',
+      searchConsoleTag: '',
+      facebookPixel: '',
+      customHeadScript: ''
+    }
+  });
+
+  // Pages State
+  const [pages, setPages] = useState<StaticPage[]>([]);
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [pageSlug, setPageSlug] = useState('');
+  const [pageTitle, setPageTitle] = useState('');
+  const [pageContent, setPageContent] = useState('');
+  const [isEditingPage, setIsEditingPage] = useState(false);
+
   // New & Edit Article Form state
   const [isCreatingArticle, setIsCreatingArticle] = useState(false);
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<CategoryType>('Pemerintahan');
-  const [newPillar, setNewPillar] = useState<'news' | 'opinion' | 'student' | 'international'>('news');
+  const [newPillar, setNewPillar] = useState<'news' | 'cerita' | 'internasional'>('news');
   const [newSummary, setNewSummary] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newImage, setNewImage] = useState('');
@@ -62,6 +117,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isHero, setIsHero] = useState(false);
   const [isEditorChoice, setIsEditorChoice] = useState(false);
   const [isTrending, setIsTrending] = useState(false);
+
+  // Double Confirmation Modal State
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
+    isOpen: boolean;
+    type: 'article' | 'page' | 'submission';
+    id: string;
+    title: string;
+  }>({ isOpen: false, type: 'article', id: '', title: '' });
 
   // Password Protection state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -77,7 +140,109 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // File Upload state
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
+  // Auto-Save Draft for Article Editor
+  useEffect(() => {
+    if (isCreatingArticle && (newTitle || newContent)) {
+      const timer = setTimeout(() => {
+        try {
+          localStorage.setItem('admin_article_draft', JSON.stringify({
+            newTitle,
+            newCategory,
+            newPillar,
+            newSummary,
+            newContent,
+            newImage,
+            newAuthorName,
+            newAuthorRole,
+            isHero,
+            isEditorChoice,
+            isTrending,
+            savedAt: new Date().toLocaleTimeString()
+          }));
+        } catch (e) {}
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isCreatingArticle, newTitle, newCategory, newPillar, newSummary, newContent, newImage, newAuthorName, newAuthorRole, isHero, isEditorChoice, isTrending]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadSettings();
+      loadPages();
+      loadSubmissions();
+    }
+  }, [isOpen]);
+
+  const loadSettings = async () => {
+    try {
+      const data = await api.getSettings();
+      if (data) setSettings(data);
+    } catch (err) {
+      console.warn('Load settings error:', err);
+    }
+  };
+
+  const loadPages = async () => {
+    try {
+      const data = await api.getPages();
+      if (Array.isArray(data)) setPages(data);
+    } catch (err) {
+      console.warn('Load pages error:', err);
+    }
+  };
+
+  const loadSubmissions = async () => {
+    try {
+      const data = await api.getSubmissions();
+      setSubmissions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn('Load submissions error:', err);
+    }
+  };
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleSaveSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      await api.saveSettings(settings);
+      showToast('Pengaturan website berhasil disimpan!');
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyimpan pengaturan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOpenCreate = () => {
+    // Check if localStorage draft exists
+    try {
+      const draft = localStorage.getItem('admin_article_draft');
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (confirm(`Draf artikel otomatis tersimpan pada ${parsed.savedAt || 'sebelumnya'}. Apakah Anda ingin melanjutkan draf tersebut?`)) {
+          setEditingArticleId(null);
+          setNewTitle(parsed.newTitle || '');
+          setNewCategory(parsed.newCategory || 'Pemerintahan');
+          setNewPillar(parsed.newPillar || 'news');
+          setNewSummary(parsed.newSummary || '');
+          setNewContent(parsed.newContent || '');
+          setNewImage(parsed.newImage || '');
+          setNewAuthorName(parsed.newAuthorName || 'Dewan Redaksi');
+          setNewAuthorRole(parsed.newAuthorRole || 'Tim Jurnalis Liberta');
+          setIsHero(parsed.isHero || false);
+          setIsEditorChoice(parsed.isEditorChoice || false);
+          setIsTrending(parsed.isTrending || false);
+          setIsCreatingArticle(true);
+          return;
+        }
+      }
+    } catch (e) {}
+
     setEditingArticleId(null);
     setNewTitle('');
     setNewCategory('Pemerintahan');
@@ -107,6 +272,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsEditorChoice(art.isEditorChoice || false);
     setIsTrending(art.isTrending || false);
     setIsCreatingArticle(true);
+  };
+
+  const handleSavePageSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pageSlug || !pageTitle || !pageContent) {
+      alert('Slug, Judul, dan Isi Halaman wajib diisi!');
+      return;
+    }
+    try {
+      setLoading(true);
+      await api.savePage({
+        id: editingPageId || undefined,
+        slug: pageSlug,
+        title: pageTitle,
+        content: pageContent
+      });
+      await loadPages();
+      setIsEditingPage(false);
+      setEditingPageId(null);
+      setPageSlug('');
+      setPageTitle('');
+      setPageContent('');
+      showToast('Halaman statis berhasil disimpan!');
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyimpan halaman statis');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -161,24 +354,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setNewContent((prev) => prev + `${prefix} Teks ${suffix}`);
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      loadSubmissions();
+  const insertYoutubeEmbed = () => {
+    const url = prompt('Masukkan URL Video YouTube (contoh: https://www.youtube.com/watch?v=dQw4w9WgXcQ):');
+    if (!url) return;
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (match && match[1]) {
+      const embedCode = `\n<iframe class="w-full aspect-video rounded-xl my-4" src="https://www.youtube.com/embed/${match[1]}" frameborder="0" allowfullscreen></iframe>\n`;
+      setNewContent((prev) => prev + embedCode);
+    } else {
+      alert('URL YouTube tidak valid');
     }
-  }, [isOpen]);
-
-  const loadSubmissions = async () => {
-    try {
-      const data = await api.getSubmissions();
-      setSubmissions(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.warn('Load submissions error:', err);
-    }
-  };
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
   };
 
   if (!isOpen) return null;
@@ -222,15 +407,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleDeleteArticle = async (id: string, title: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus artikel "${title}"?`)) return;
+  const executeConfirmedDelete = async () => {
+    const { type, id } = confirmDeleteModal;
+    setConfirmDeleteModal({ isOpen: false, type: 'article', id: '', title: '' });
+
     try {
       setLoading(true);
-      await api.deleteArticle(id);
-      onArticlesChange();
-      showToast('Artikel berhasil dihapus!');
+      if (type === 'article') {
+        await api.deleteArticle(id);
+        onArticlesChange();
+        showToast('Artikel berhasil dihapus!');
+      } else if (type === 'page') {
+        await api.deletePage(id);
+        await loadPages();
+        showToast('Halaman statis berhasil dihapus!');
+      } else if (type === 'submission') {
+        await api.deleteSubmission(id);
+        await loadSubmissions();
+        showToast('Naskah warga berhasil dihapus!');
+      }
     } catch (err) {
-      showToast('Gagal menghapus artikel');
+      showToast('Gagal menghapus item');
     } finally {
       setLoading(false);
     }
@@ -284,6 +481,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         showToast('Artikel baru berhasil diterbitkan!');
       }
 
+      try { localStorage.removeItem('admin_article_draft'); } catch (e) {}
       setIsCreatingArticle(false);
       setEditingArticleId(null);
       setNewTitle('');
@@ -306,9 +504,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="w-14 h-14 rounded-xl bg-[#E5252A] mx-auto flex items-center justify-center shadow-md text-white font-black text-xl">
               LM
             </div>
-            <h3 className="text-xl font-black tracking-tight text-slate-900">Admin Control Panel</h3>
+            <h3 className="text-xl font-black tracking-tight text-slate-900">WordPress / Blogger Suite CMS</h3>
             <p className="text-xs text-slate-500">
-              Masukkan password pengelola untuk masuk ke dashboard libertamedia.com
+              Masukkan password pengelola untuk masuk ke control panel libertamedia.com
             </p>
           </div>
 
@@ -337,7 +535,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               type="submit"
               className="w-full bg-[#E5252A] hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm shadow-md transition-all flex items-center justify-center gap-2"
             >
-              Masuk Dashboard &rarr;
+              Masuk Dashboard CMS &rarr;
             </button>
           </form>
 
@@ -356,10 +554,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl w-full max-w-6xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-800">
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl w-full max-w-7xl h-[94vh] flex flex-col shadow-2xl overflow-hidden text-slate-800">
         
-        {/* Header Clean Bar (Inspired by cPanel Clientzone Navbar) */}
-        <div className="bg-white px-6 py-3.5 border-b border-slate-200 flex items-center justify-between shadow-2xs">
+        {/* Header Bar */}
+        <div className="bg-white px-6 py-3 border-b border-slate-200 flex items-center justify-between shadow-2xs">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#E5252A] flex items-center justify-center font-black text-white text-sm shadow-xs">
               LM
@@ -367,15 +565,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-slate-900 tracking-tight">
-                  Dashboard Pengelola • libertamedia.com
+                  {settings.siteName} • WordPress/Blogger Suite CMS
                 </h2>
                 <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
                   <ShieldCheck className="w-3 h-3" />
-                  cPanel Engine Aktif
+                  Live Sync
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">
-                Pusat Kontrol Sederhana untuk Tampilan Frontend & Berita Utama
+                Pusat Kontrol 100% Tampilan Frontend, Iklan, SEO, & Halaman Statis
               </p>
             </div>
           </div>
@@ -390,7 +588,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               title="Lihat Tampilan Depan Website"
             >
               <Globe className="w-3.5 h-3.5 text-[#E5252A]" />
-              <span className="hidden sm:inline">Lihat Web</span>
+              <span className="hidden sm:inline">Pratinjau Web</span>
             </button>
             <button
               onClick={handleLogout}
@@ -411,7 +609,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Toast Notification */}
         {toastMessage && (
-          <div className="bg-emerald-600 text-white px-6 py-2.5 text-xs font-semibold flex items-center justify-between animate-in slide-in-from-top duration-200 shadow-md">
+          <div className="bg-emerald-600 text-white px-6 py-2 text-xs font-semibold flex items-center justify-between animate-in slide-in-from-top duration-200 shadow-md">
             <span className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
               {toastMessage}
@@ -422,50 +620,107 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        {/* Main Workspace Grid (Left Sidebar + Main Content) */}
+        {/* Main Workspace (Sidebar + Tab Content) */}
         <div className="flex-1 flex overflow-hidden">
           
-          {/* Left Navigation Sidebar */}
-          <div className="w-56 bg-white border-r border-slate-200 p-4 flex flex-col justify-between shadow-2xs">
+          {/* 6-Module Navigation Sidebar */}
+          <div className="w-60 bg-white border-r border-slate-200 p-3 flex flex-col justify-between shadow-2xs overflow-y-auto">
             <div className="space-y-1">
-              <div className="px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                Menu Pengelola
+              
+              <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                Utama & Statistik
               </div>
-
               <button
-                onClick={() => { setActiveTab('overview'); setIsCreatingArticle(false); }}
+                onClick={() => { setActiveTab('overview'); setIsCreatingArticle(false); setIsEditingPage(false); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'overview'
-                    ? 'bg-[#E5252A] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  activeTab === 'overview' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <LayoutDashboard className="w-4 h-4" />
-                Ringkasan Utama
+                Ringkasan Status
               </button>
 
+              <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase pt-2">
+                Suiter CMS Frontend
+              </div>
+              
               <button
-                onClick={() => { setActiveTab('articles'); setIsCreatingArticle(false); }}
+                onClick={() => { setActiveTab('identity'); setIsCreatingArticle(false); setIsEditingPage(false); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'articles'
-                    ? 'bg-[#E5252A] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  activeTab === 'identity' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <FileText className="w-4 h-4" />
-                Kelola Berita ({safeArticles.length})
+                <Globe className="w-4 h-4 text-blue-500" />
+                1. Identitas & Branding
               </button>
 
               <button
-                onClick={() => { setActiveTab('submissions'); setIsCreatingArticle(false); }}
+                onClick={() => { setActiveTab('layout'); setIsCreatingArticle(false); setIsEditingPage(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'layout' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Sliders className="w-4 h-4 text-purple-500" />
+                2. Layout Seksi Depan
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('navigation'); setIsCreatingArticle(false); setIsEditingPage(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'navigation' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Palette className="w-4 h-4 text-amber-500" />
+                3. Menu & Kategori
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('ads_analytics'); setIsCreatingArticle(false); setIsEditingPage(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'ads_analytics' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Megaphone className="w-4 h-4 text-emerald-500" />
+                4. Iklan & Script GA4
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('pages'); setIsCreatingArticle(false); setIsEditingPage(false); }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'submissions'
-                    ? 'bg-[#E5252A] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  activeTab === 'pages' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Inbox className="w-4 h-4" />
+                  <BookOpen className="w-4 h-4 text-rose-500" />
+                  5. Halaman Statis
+                </div>
+                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
+                  {pages.length}
+                </span>
+              </button>
+
+              <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase pt-2">
+                Konten & Redaksi
+              </div>
+
+              <button
+                onClick={() => { setActiveTab('articles'); setIsCreatingArticle(false); setIsEditingPage(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'articles' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <FileText className="w-4 h-4 text-[#E5252A]" />
+                6. Editor Berita ({safeArticles.length})
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('submissions'); setIsCreatingArticle(false); setIsEditingPage(false); }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'submissions' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Inbox className="w-4 h-4 text-indigo-500" />
                   Opini Warga
                 </div>
                 {submissions.length > 0 && (
@@ -478,36 +733,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
 
               <button
-                onClick={() => { setActiveTab('settings'); setIsCreatingArticle(false); }}
+                onClick={() => { setActiveTab('settings'); setIsCreatingArticle(false); setIsEditingPage(false); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'settings'
-                    ? 'bg-[#E5252A] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  activeTab === 'settings' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Database className="w-4 h-4" />
-                Status System & DB
+                <Database className="w-4 h-4 text-slate-500" />
+                cPanel MySQL & DB
               </button>
+
             </div>
 
-            {/* Action Button: Tulis Berita */}
             <button
               onClick={() => { setActiveTab('articles'); handleOpenCreate(); }}
-              className="w-full bg-slate-900 hover:bg-black text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
+              className="w-full mt-4 bg-slate-900 hover:bg-black text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
             >
               <Plus className="w-4 h-4 text-emerald-400" />
               Tulis Artikel Baru
             </button>
+
           </div>
 
-          {/* Main Content Workspace */}
+          {/* Main Content Viewport */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
             
-            {/* TAB 1: RINGKASAN UTAMA (OVERVIEW) */}
+            {/* OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                
-                {/* 4 Summary Stat Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
                     <div className="flex items-center justify-between text-slate-400">
@@ -529,11 +781,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
                     <div className="flex items-center justify-between text-slate-400">
-                      <span className="text-xs font-bold uppercase tracking-wider">Opini Warga</span>
-                      <Inbox className="w-5 h-5 text-blue-600" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Halaman Statis</span>
+                      <BookOpen className="w-5 h-5 text-purple-600" />
                     </div>
-                    <div className="text-2xl font-black text-slate-900">{submissions.length}</div>
-                    <p className="text-[11px] text-slate-500">Naskah masuk di inbox</p>
+                    <div className="text-2xl font-black text-slate-900">{pages.length}</div>
+                    <p className="text-[11px] text-slate-500">Pedoman, Redaksi, dll.</p>
                   </div>
 
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
@@ -542,72 +794,507 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <Eye className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div className="text-2xl font-black text-slate-900">{totalViewsCount.toLocaleString('id-ID')}</div>
-                    <p className="text-[11px] text-slate-500">Akumulasi pembaca berita</p>
+                    <p className="text-[11px] text-slate-500">Akumulasi views berita</p>
                   </div>
                 </div>
 
-                {/* Main Summary Status Box (cPanel Inspired) */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      Status Sistem Server & Database
+                      Status Sistem Server & Content Suite Active
                     </h3>
-                    <span className="text-xs text-slate-400">cPanel Phusion Passenger</span>
+                    <span className="text-xs text-slate-400">WordPress/Blogger Suite Engine</span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                     <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Penyimpanan Data</span>
-                      <div className="font-extrabold text-slate-800">Storage Abstraction Layer</div>
-                      <span className="text-slate-500 block">Atomic JsonStorageAdapter + MySQL Pool</span>
+                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Site Branding</span>
+                      <div className="font-extrabold text-slate-800">{settings.siteName}</div>
+                      <span className="text-slate-500 block truncate">{settings.tagline}</span>
                     </div>
 
                     <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Optimasi Performa Media</span>
-                      <div className="font-extrabold text-slate-800">Sharp Automated WebP</div>
-                      <span className="text-slate-500 block">Auto Resize 1200px (Quality 80)</span>
+                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Media Sharp Engine</span>
+                      <div className="font-extrabold text-slate-800">Auto WebP 1200px</div>
+                      <span className="text-slate-500 block">Quality 80 Compression</span>
                     </div>
 
                     <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Engine SEO & Headers</span>
-                      <div className="font-extrabold text-slate-800">Helmet + HSTS + JSON-LD</div>
-                      <span className="text-slate-500 block">Dynamic Sitemap & Robots.txt Active</span>
+                      <span className="text-slate-400 font-bold block uppercase text-[10px]">AdSense & Analytics</span>
+                      <div className="font-extrabold text-slate-800">
+                        {settings.analyticsScripts.ga4Id ? 'GA4 Active' : 'Slot Iklan Siap'}
+                      </div>
+                      <span className="text-slate-500 block">GA4, Search Console, Facebook Pixel</span>
                     </div>
                   </div>
                 </div>
-
-                {/* Quick Action Panel */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                  <h3 className="font-extrabold text-sm text-slate-900">Aksi Cepat Pengelola</h3>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button
-                      onClick={() => { setActiveTab('articles'); handleOpenCreate(); }}
-                      className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-2xs flex items-center gap-1.5 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Tulis Artikel Berita Baru
-                    </button>
-                    <button
-                      onClick={() => { setActiveTab('submissions'); }}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-lg transition-all flex items-center gap-1.5"
-                    >
-                      <Inbox className="w-4 h-4 text-blue-600" />
-                      Periksa Naskah Opini Warga ({submissions.length})
-                    </button>
-                  </div>
-                </div>
-
               </div>
             )}
 
-            {/* TAB 2: KELOLA BERITA */}
+            {/* MODUL 1: IDENTITAS & BRANDING */}
+            {activeTab === 'identity' && (
+              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-600" />
+                    Modul 1: Identitas & Branding Situs
+                  </h3>
+                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                    <Save className="w-3.5 h-3.5" />
+                    {loading ? 'Menyimpan...' : 'Simpan Identitas'}
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Nama Portal / Website</label>
+                      <input
+                        type="text"
+                        required
+                        value={settings.siteName}
+                        onChange={e => setSettings({ ...settings, siteName: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Tagline Slogan</label>
+                      <input
+                        type="text"
+                        required
+                        value={settings.tagline}
+                        onChange={e => setSettings({ ...settings, tagline: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Deskripsi Global SEO Website</label>
+                    <textarea
+                      rows={3}
+                      value={settings.description}
+                      onChange={e => setSettings({ ...settings, description: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Default OG Image URL (Media Social Preview)</label>
+                    <input
+                      type="text"
+                      value={settings.defaultOgImage}
+                      onChange={e => setSettings({ ...settings, defaultOgImage: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Teks Copyright Footer</label>
+                    <input
+                      type="text"
+                      value={settings.copyrightText}
+                      onChange={e => setSettings({ ...settings, copyrightText: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                    />
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 space-y-3">
+                    <span className="font-bold text-slate-900 block">Link Akun Media Sosial Resmi:</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-500 mb-0.5 font-medium">Instagram URL</label>
+                        <input
+                          type="text"
+                          value={settings.socialLinks?.instagram || ''}
+                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, instagram: e.target.value } })}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-500 mb-0.5 font-medium">X (Twitter) URL</label>
+                        <input
+                          type="text"
+                          value={settings.socialLinks?.twitter || ''}
+                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, twitter: e.target.value } })}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-500 mb-0.5 font-medium">YouTube Channel URL</label>
+                        <input
+                          type="text"
+                          value={settings.socialLinks?.youtube || ''}
+                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, youtube: e.target.value } })}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-500 mb-0.5 font-medium">TikTok URL</label>
+                        <input
+                          type="text"
+                          value={settings.socialLinks?.tiktok || ''}
+                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, tiktok: e.target.value } })}
+                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* MODUL 2: HOMEPAGE LAYOUT MANAGER */}
+            {activeTab === 'layout' && (
+              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-purple-600" />
+                    Modul 2: Homepage Layout & Section Manager
+                  </h3>
+                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                    <Save className="w-3.5 h-3.5" />
+                    {loading ? 'Menyimpan...' : 'Simpan Layout'}
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <span className="font-bold text-slate-900 block">Kontrol Visibilitas Seksi Halaman Depan:</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { key: 'breakingNews', label: 'Running Text / Ticker Breaking News' },
+                      { key: 'heroSlider', label: 'Hero Headline Slider Utama' },
+                      { key: 'editorsPicks', label: 'Seksi Pilihan Redaksi (Editor Picks)' },
+                      { key: 'citizenVoice', label: 'Seksi Suara Warga / Opini Publik' },
+                      { key: 'multimedia', label: 'Seksi Video & Multimedia' },
+                      { key: 'newsletter', label: 'Form Berlangganan Newsletter' }
+                    ].map(sec => (
+                      <label key={sec.key} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors">
+                        <span className="font-bold text-slate-800">{sec.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((settings.sectionToggles as any)?.[sec.key])}
+                          onChange={e => setSettings({
+                            ...settings,
+                            sectionToggles: { ...settings.sectionToggles, [sec.key]: e.target.checked }
+                          })}
+                          className="w-4 h-4 rounded text-[#E5252A] focus:ring-[#E5252A]"
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 space-y-2">
+                    <label className="font-bold text-slate-900 block">Gaya Tampilan Kartu Berita (Card Display Style)</label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <input
+                          type="radio"
+                          name="cardDisplayStyle"
+                          value="grid"
+                          checked={settings.cardDisplayStyle === 'grid'}
+                          onChange={() => setSettings({ ...settings, cardDisplayStyle: 'grid' })}
+                          className="text-[#E5252A] focus:ring-[#E5252A]"
+                        />
+                        <span className="font-bold text-slate-800">Grid View (Kotak Card Modern)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <input
+                          type="radio"
+                          name="cardDisplayStyle"
+                          value="list"
+                          checked={settings.cardDisplayStyle === 'list'}
+                          onChange={() => setSettings({ ...settings, cardDisplayStyle: 'list' })}
+                          className="text-[#E5252A] focus:ring-[#E5252A]"
+                        />
+                        <span className="font-bold text-slate-800">List View (Daftar Baris Ringkas)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* MODUL 3: MANAJEMEN MENU & KATEGORI */}
+            {activeTab === 'navigation' && (
+              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-amber-500" />
+                    Modul 3: Manajemen Menu & Kanal Kategori
+                  </h3>
+                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                    <Save className="w-3.5 h-3.5" />
+                    {loading ? 'Menyimpan...' : 'Simpan Kategori'}
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <p className="text-slate-500">
+                    Atur daftar kanal kategori yang muncul pada <em>Swipeable Navbar Pills</em> di halaman depan:
+                  </p>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Tambah nama kanal kategori baru..."
+                      id="newCatInput"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val && !settings.customCategories.includes(val)) {
+                            setSettings({ ...settings, customCategories: [...settings.customCategories, val] });
+                            (e.target as HTMLInputElement).value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('newCatInput') as HTMLInputElement;
+                        if (input && input.value.trim() && !settings.customCategories.includes(input.value.trim())) {
+                          setSettings({ ...settings, customCategories: [...settings.customCategories, input.value.trim()] });
+                          input.value = '';
+                        }
+                      }}
+                      className="bg-slate-900 hover:bg-black text-white font-bold px-4 py-2 rounded-lg"
+                    >
+                      + Tambah Kategori
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {settings.customCategories.map((cat, idx) => (
+                      <div key={cat} className="bg-slate-100 border border-slate-200 text-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold">
+                        <span>{cat}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = settings.customCategories.filter((_, i) => i !== idx);
+                            setSettings({ ...settings, customCategories: updated });
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* MODUL 4: IKLAN & ANALITIK */}
+            {activeTab === 'ads_analytics' && (
+              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                    <Megaphone className="w-4 h-4 text-emerald-600" />
+                    Modul 4: Manajemen Iklan & Script Analitik
+                  </h3>
+                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
+                    <Save className="w-3.5 h-3.5" />
+                    {loading ? 'Menyimpan...' : 'Simpan Iklan & Script'}
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <span className="font-bold text-slate-900 block">Slot Iklan (Monetisasi Banner Code / AdSense):</span>
+                  
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Header Banner Slot (Bisa Kode AdSense / Image HTML)</label>
+                    <textarea
+                      rows={3}
+                      placeholder="<script async src='...'></script> atau <a href='...'><img src='...' /></a>"
+                      value={settings.adSlots?.headerBanner || ''}
+                      onChange={e => setSettings({ ...settings, adSlots: { ...settings.adSlots, headerBanner: e.target.value } })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">In-Article Banner Slot (Muncul Setelah Paragraf ke-2)</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Kode iklan di tengah artikel..."
+                      value={settings.adSlots?.inArticleBanner || ''}
+                      onChange={e => setSettings({ ...settings, adSlots: { ...settings.adSlots, inArticleBanner: e.target.value } })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px]"
+                    />
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 space-y-3">
+                    <span className="font-bold text-slate-900 block">Injeksi Script Analitik & Head Tags:</span>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Google Analytics 4 (GA4 ID / Measurement ID)</label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: G-XXXXXXXXXX"
+                        value={settings.analyticsScripts?.ga4Id || ''}
+                        onChange={e => setSettings({ ...settings, analyticsScripts: { ...settings.analyticsScripts, ga4Id: e.target.value } })}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Google Search Console Verification Tag</label>
+                      <input
+                        type="text"
+                        placeholder='<meta name="google-site-verification" content="..." />'
+                        value={settings.analyticsScripts?.searchConsoleTag || ''}
+                        onChange={e => setSettings({ ...settings, analyticsScripts: { ...settings.analyticsScripts, searchConsoleTag: e.target.value } })}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* MODUL 5: PENGELOLA HALAMAN STATIS */}
+            {activeTab === 'pages' && (
+              <div className="space-y-4">
+                {!isEditingPage ? (
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-rose-600" />
+                        Modul 5: Pengelola Halaman Statis CMS ({pages.length})
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setEditingPageId(null);
+                          setPageSlug('');
+                          setPageTitle('');
+                          setPageContent('');
+                          setIsEditingPage(true);
+                        }}
+                        className="bg-slate-900 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                        Buat Halaman Statis Baru
+                      </button>
+                    </div>
+
+                    <div className="divide-y divide-slate-100">
+                      {pages.map(p => (
+                        <div key={p.id} className="py-3 flex items-center justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-xs sm:text-sm text-slate-900">{p.title}</h4>
+                              <code className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">
+                                /p/{p.slug}
+                              </code>
+                            </div>
+                            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{p.content}</p>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => window.open(`/p/${p.slug}`, '_blank')}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-600"
+                              title="Buka Halaman"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingPageId(p.id);
+                                setPageSlug(p.slug);
+                                setPageTitle(p.title);
+                                setPageContent(p.content);
+                                setIsEditingPage(true);
+                              }}
+                              className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-bold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteModal({ isOpen: true, type: 'page', id: p.id, title: p.title })}
+                              className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSavePageSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4 max-w-3xl">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <h3 className="font-extrabold text-sm text-slate-900">
+                        {editingPageId ? 'Edit Halaman Statis' : 'Buat Halaman Statis Baru'}
+                      </h3>
+                      <button type="button" onClick={() => setIsEditingPage(false)} className="text-xs text-slate-400 hover:text-slate-700">
+                        Batal
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Judul Halaman</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Judul halaman..."
+                          value={pageTitle}
+                          onChange={e => {
+                            setPageTitle(e.target.value);
+                            if (!editingPageId) {
+                              setPageSlug(e.target.value.toLowerCase().replace(/[^\w-]/g, '').replace(/\s+/g, '-'));
+                            }
+                          }}
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">URL Slug (contoh: pedoman-media-siber)</label>
+                        <input
+                          type="text"
+                          required
+                          value={pageSlug}
+                          onChange={e => setPageSlug(e.target.value.toLowerCase().replace(/[^\w-]/g, ''))}
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Isi Konten Halaman (Plain text / HTML)</label>
+                        <textarea
+                          rows={12}
+                          required
+                          value={pageContent}
+                          onChange={e => setPageContent(e.target.value)}
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs leading-relaxed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                      <button type="button" onClick={() => setIsEditingPage(false)} className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-600">
+                        Batal
+                      </button>
+                      <button type="submit" disabled={loading} className="px-5 py-2 bg-[#E5252A] hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-2xs">
+                        {loading ? 'Menyimpan...' : 'Simpan Halaman'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* MODUL 6: EDITOR BERITA TINGKAT LANJUT */}
             {activeTab === 'articles' && (
               <div className="space-y-4">
                 {!isCreatingArticle ? (
                   <div className="space-y-4">
-                    
-                    {/* Header Action Bar */}
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
                       <div className="relative w-full sm:w-72">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -626,9 +1313,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             key={cat}
                             onClick={() => setFilterCategory(cat)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
-                              filterCategory === cat
-                                ? 'bg-[#E5252A] text-white shadow-2xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              filterCategory === cat ? 'bg-[#E5252A] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                           >
                             {cat}
@@ -644,11 +1329,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
-                    {/* Simple Clean Table View */}
                     <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
                       <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider">
                         <span>Daftar Artikel ({filteredArticles.length})</span>
-                        <span>Aksi & Tampilan</span>
+                        <span>Aksi & Layout</span>
                       </div>
 
                       <div className="divide-y divide-slate-100">
@@ -683,17 +1367,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </div>
                             </div>
 
-                            {/* Action Control Buttons */}
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <button
                                 onClick={() => handleToggleHero(article)}
                                 disabled={loading}
                                 className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                                  article.isHero
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  article.isHero ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                 }`}
-                                title="Set sebagai Hero Slider Utama"
                               >
                                 <Star className={`w-3.5 h-3.5 ${article.isHero ? 'fill-amber-500 text-amber-500' : ''}`} />
                                 Hero
@@ -703,11 +1383,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onClick={() => handleToggleEditorChoice(article)}
                                 disabled={loading}
                                 className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                                  article.isEditorChoice
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  article.isEditorChoice ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                 }`}
-                                title="Set sebagai Pilihan Redaksi"
                               >
                                 <Sparkles className="w-3.5 h-3.5" />
                                 Choice
@@ -723,7 +1400,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </button>
 
                               <button
-                                onClick={() => handleDeleteArticle(article.id, article.title)}
+                                onClick={() => setConfirmDeleteModal({ isOpen: true, type: 'article', id: article.id, title: article.title })}
                                 disabled={loading}
                                 className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg border border-red-200 transition-all"
                                 title="Hapus Berita"
@@ -735,16 +1412,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         ))}
                       </div>
                     </div>
-
                   </div>
                 ) : (
-                  /* Form Tulis / Edit Artikel Sederhana */
+                  /* Form Rich Editor Berita */
                   <form onSubmit={handleCreateArticleSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-5 max-w-3xl">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                        <Plus className="w-4 h-4 text-[#E5252A]" />
-                        {editingArticleId ? 'Edit Artikel Berita' : 'Tulis Artikel Berita Baru'}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                          <Plus className="w-4 h-4 text-[#E5252A]" />
+                          {editingArticleId ? 'Edit Artikel Berita' : 'Tulis Artikel Berita Baru'}
+                        </h3>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
+                          ⚡ Auto-Save Draft
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setIsCreatingArticle(false)}
@@ -756,7 +1437,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                     <div className="space-y-4 text-xs">
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">Judul Berita</label>
+                        <label className="block font-bold text-slate-700 mb-1">Judul Berita Utama</label>
                         <input
                           type="text"
                           required
@@ -775,24 +1456,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             onChange={e => setNewCategory(e.target.value as CategoryType)}
                             className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
                           >
-                            <option value="Pemerintahan">Pemerintahan</option>
-                            <option value="Politik">Politik</option>
-                            <option value="Mahasiswa">Mahasiswa & Kampus</option>
-                            <option value="Ekonomi">Ekonomi & Bisnis</option>
-                            <option value="Internasional">Internasional</option>
-                            <option value="Opini">Opini Publik</option>
+                            {settings.customCategories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
                           </select>
                         </div>
 
                         <div>
-                          <label className="block font-bold text-slate-700 mb-1">Cover Foto</label>
+                          <label className="block font-bold text-slate-700 mb-1">Cover Foto Berita</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="text"
                               placeholder="URL foto / Upload..."
                               value={newImage}
                               onChange={e => setNewImage(e.target.value)}
-                              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
                             />
                             <label className="bg-slate-900 text-white font-bold px-3 py-2 rounded-lg cursor-pointer flex-shrink-0 hover:bg-black transition-all">
                               {isUploadingImage ? 'Uploading...' : '📁 Select'}
@@ -803,29 +1481,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
 
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">Ringkasan Singkat (Lead)</label>
+                        <label className="block font-bold text-slate-700 mb-1">Ringkasan Eksekutif (Lead)</label>
                         <textarea
                           rows={2}
                           placeholder="Ringkasan singkat 1-2 kalimat..."
                           value={newSummary}
                           onChange={e => setNewSummary(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
                         />
                       </div>
 
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block font-bold text-slate-700">Isi Naskah Berita</label>
-                          <div className="flex gap-1 text-[11px]">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                          <label className="block font-bold text-slate-700">Isi Naskah Berita (Rich Editor)</label>
+                          <div className="flex gap-1 text-[11px] flex-wrap">
                             <button type="button" onClick={() => insertTextFormatting('**', '**')} className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded font-bold">B</button>
                             <button type="button" onClick={() => insertTextFormatting('*', '*')} className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded italic">I</button>
                             <button type="button" onClick={() => insertTextFormatting('\n## ', '\n')} className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded font-bold text-[#E5252A]">H2</button>
+                            <button type="button" onClick={insertYoutubeEmbed} className="px-2 py-0.5 bg-red-100 text-red-700 hover:bg-red-200 rounded font-bold flex items-center gap-1">
+                              <Youtube className="w-3 h-3" /> YouTube Embed
+                            </button>
                           </div>
                         </div>
                         <textarea
-                          rows={8}
+                          rows={10}
                           required
-                          placeholder="Tulis naskah berita secara lengkap..."
+                          placeholder="Tulis naskah berita secara komprehensif..."
                           value={newContent}
                           onChange={e => setNewContent(e.target.value)}
                           className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A] font-sans leading-relaxed"
@@ -879,7 +1560,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
 
-            {/* TAB 3: INBOX OPINI WARGA */}
+            {/* TAB INBOX SUARA WARGA */}
             {activeTab === 'submissions' && (
               <div className="space-y-4">
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
@@ -907,14 +1588,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               Penulis: <strong>{sub.authorName}</strong> ({sub.institution}) • {sub.email}
                             </p>
                           </div>
-                          <button
-                            onClick={() => handlePublishSubmission(sub)}
-                            disabled={loading}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap"
-                          >
-                            <Check className="w-4 h-4" />
-                            Publikasikan 1-Klik
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handlePublishSubmission(sub)}
+                              disabled={loading}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap"
+                            >
+                              <Check className="w-4 h-4" />
+                              Publikasikan 1-Klik
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteModal({ isOpen: true, type: 'submission', id: sub.id, title: sub.title })}
+                              disabled={loading}
+                              className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                         <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-200 line-clamp-3">
                           {sub.content}
@@ -926,7 +1616,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
 
-            {/* TAB 4: STATUS SYSTEM & DB */}
+            {/* TAB STATUS SYSTEM & DB */}
             {activeTab === 'settings' && (
               <div className="space-y-4 max-w-2xl">
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
@@ -941,17 +1631,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="p-4 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                     <div>
-                      Server cPanel Aktif! Seluruh data artikel & naskah tersimpan secara aman di server cPanel Anda.
+                      Server cPanel Aktif! Seluruh data artikel, halaman statis, dan pengaturan website tersimpan secara aman di server cPanel Anda.
                     </div>
-                  </div>
-
-                  <div className="pt-2 space-y-2 text-xs text-slate-600">
-                    <p className="font-bold text-slate-900">Konfigurasi Database MySQL (Opsional phpMyAdmin):</p>
-                    <ol className="list-decimal pl-5 space-y-1">
-                      <li>Buka cPanel &rarr; menu <strong>phpMyAdmin</strong>.</li>
-                      <li>Impor file <code className="bg-slate-100 text-slate-800 px-1 rounded">cpanel_mysql_setup.sql</code>.</li>
-                      <li>Set variabel lingkungan <code className="bg-slate-100 text-slate-800 px-1 rounded">DATABASE_TYPE=mysql</code> di berkas <code className="bg-slate-100 text-slate-800 px-1 rounded">.env</code>.</li>
-                    </ol>
                   </div>
                 </div>
               </div>
@@ -961,6 +1642,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         </div>
       </div>
+
+      {/* Double Confirmation Modal Pop-up */}
+      {confirmDeleteModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900">Konfirmasi Hapus</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Apakah Anda yakin ingin menghapus <strong>"{confirmDeleteModal.title}"</strong>? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <div className="flex justify-center gap-3 pt-2">
+              <button
+                onClick={() => setConfirmDeleteModal({ isOpen: false, type: 'article', id: '', title: '' })}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700"
+              >
+                Batal
+              </button>
+              <button
+                onClick={executeConfirmedDelete}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-xs"
+              >
+                Ya, Hapus Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
