@@ -1319,21 +1319,25 @@ async function startServer() {
     });
   }
 
-  if (typeof PORT === "string" && PORT.startsWith("/")) {
-    try {
-      if (fs.existsSync(PORT)) {
-        fs.unlinkSync(PORT);
-      }
-    } catch (e) {
-      console.warn("Socket cleanup warning:", e);
-    }
-  }
+  // Only call app.listen if NOT running under Phusion Passenger
+  const isPassenger = Boolean(
+    process.env.PASSENGER_APP_ENV ||
+    process.env.PHUSION_PASSENGER ||
+    PORT === "passenger" ||
+    (typeof PORT === "string" && (PORT.includes("passenger") || PORT.startsWith("/")))
+  );
 
-  app.listen(PORT, () => {
-    console.log(`[libertamedia.com] Server running on port ${PORT}`);
-  });
+  if (!isPassenger) {
+    app.listen(PORT, () => {
+      console.log(`[libertamedia.com] Server running on port ${PORT}`);
+    });
+  } else {
+    console.log(`[libertamedia.com] Express app exported for cPanel Phusion Passenger.`);
+  }
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("[libertamedia.com Server Startup Error]:", err);
+});
 
 export default app;
