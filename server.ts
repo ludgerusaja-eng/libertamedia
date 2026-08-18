@@ -703,25 +703,61 @@ const DEFAULT_STATIC_PAGES = [
 let SETTINGS_CACHE: { data: any; timestamp: number } | null = null;
 
 // GET /api/settings (Public, cached 5-min)
-app.get("/api/settings", (req, res) => {
-  const now = Date.now();
-  if (SETTINGS_CACHE && now - SETTINGS_CACHE.timestamp < 5 * 60 * 1000) {
-    return res.json({ success: true, data: SETTINGS_CACHE.data });
-  }
+app.get('/api/settings', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (SETTINGS_CACHE && now - SETTINGS_CACHE.timestamp < 5 * 60 * 1000) {
+      return res.json({ success: true, data: SETTINGS_CACHE.data, ...SETTINGS_CACHE.data });
+    }
 
-  const db = readDatabase();
-  const settings = db.settings || DEFAULT_SITE_SETTINGS;
-  SETTINGS_CACHE = { data: settings, timestamp: now };
-  res.json({ success: true, data: settings });
+    let settings: any = null;
+    if (typeof storage.getSettings === 'function') {
+      try {
+        settings = await storage.getSettings();
+      } catch (e) {
+        console.warn('Storage getSettings warning:', e);
+      }
+    }
+    if (!settings) {
+      const db = readDatabase();
+      settings = db.settings || DEFAULT_SITE_SETTINGS;
+    }
+
+    SETTINGS_CACHE = { data: settings, timestamp: now };
+    res.json({ success: true, data: settings, ...settings });
+  } catch (err: any) {
+    console.error('Error fetching settings:', err);
+    res.status(500).json({ error: 'Gagal mengambil pengaturan' });
+  }
 });
 
 // POST /api/settings (Admin protected)
-app.post("/api/settings", requireAdminAuth, (req, res) => {
-  const db = readDatabase();
-  db.settings = { ...DEFAULT_SITE_SETTINGS, ...db.settings, ...req.body };
-  writeDatabase(db);
-  SETTINGS_CACHE = { data: db.settings, timestamp: Date.now() };
-  res.json({ success: true, message: "Pengaturan website berhasil diperbarui", data: db.settings });
+app.post('/api/settings', requireAdminAuth, async (req, res) => {
+  try {
+    const newSettings = req.body;
+    if (!newSettings || typeof newSettings !== 'object' || Array.isArray(newSettings)) {
+      return res.status(400).json({ error: 'Payload pengaturan tidak valid' });
+    }
+
+    const db = readDatabase();
+    const mergedSettings = { ...DEFAULT_SITE_SETTINGS, ...db.settings, ...newSettings };
+    db.settings = mergedSettings;
+    writeDatabase(db);
+
+    if (typeof storage.saveSettings === 'function') {
+      try {
+        await storage.saveSettings(mergedSettings);
+      } catch (e) {
+        console.warn('Error saving settings to storage:', e);
+      }
+    }
+
+    SETTINGS_CACHE = { data: mergedSettings, timestamp: Date.now() };
+    res.json({ success: true, message: 'Pengaturan berhasil disimpan', data: mergedSettings });
+  } catch (err: any) {
+    console.error('Error saving settings to storage:', err);
+    res.status(500).json({ error: err.message || 'Gagal menyimpan pengaturan ke database' });
+  }
 });
 
 // GET /api/pages (Public)

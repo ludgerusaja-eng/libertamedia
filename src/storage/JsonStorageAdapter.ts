@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { DBStructure, IStorageAdapter } from './Repository';
+import { SiteSettings } from '../types';
 
 export class JsonStorageAdapter implements IStorageAdapter {
   private dataDir: string;
@@ -71,5 +72,16 @@ export class JsonStorageAdapter implements IStorageAdapter {
     } finally {
       this.isWriting = false;
     }
+  }
+
+  public getSettings(): SiteSettings | null {
+    const db = this.readDatabase();
+    return db.settings || null;
+  }
+
+  public saveSettings(settings: SiteSettings): boolean {
+    const db = this.readDatabase();
+    db.settings = settings;
+    return this.writeDatabase(db);
   }
 }

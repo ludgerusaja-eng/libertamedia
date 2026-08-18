@@ -11,4 +11,6 @@ export interface DBStructure {
 export interface IStorageAdapter {
   readDatabase(): DBStructure;
   writeDatabase(data: DBStructure): boolean;
+  getSettings?(): Promise<SiteSettings | null> | SiteSettings | null;
+  saveSettings?(settings: SiteSettings): Promise<boolean> | boolean;
 }

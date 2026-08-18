@@ -310,14 +310,30 @@ export const api = {
   },
 
   async saveSettings(settingsData: any): Promise<any> {
-    const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: getAdminAuthHeaders(),
-      body: JSON.stringify(settingsData),
-    });
-    if (!res.ok) throw new Error('Gagal menyimpan pengaturan website');
-    const data = await safeJsonResponse(res);
-    return data.data;
+    try {
+      const token = sessionStorage.getItem('liberta_admin_token') || getAdminToken();
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Admin-Token': token || ''
+        },
+        body: JSON.stringify(settingsData),
+      });
+
+      if (!res.ok) {
+        const errorData = await safeJsonResponse(res).catch(() => ({}));
+        console.error('Save settings server error:', errorData);
+        throw new Error(errorData.error || errorData.message || `HTTP ${res.status}`);
+      }
+
+      const data = await safeJsonResponse(res);
+      return data.data || data;
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+      throw err;
+    }
   },
 
   // 13. Static Pages API (CMS Pages)
