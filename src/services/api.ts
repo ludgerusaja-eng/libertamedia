@@ -394,4 +394,5 @@ export const publishSubmission = (id: string) => api.publishSubmission(id);
 export const deleteSubmission = (id: string) => api.deleteSubmission(id);
 export const fetchSettings = () => api.getSettings();
 export const saveSiteSettings = (settings: any) => api.saveSettings(settings);
+export const uploadImage = (file: File) => api.uploadImage(file);
 
