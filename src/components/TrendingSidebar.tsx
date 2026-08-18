@@ -85,41 +85,49 @@ export const TrendingSidebar: React.FC<TrendingSidebarProps> = ({
           <div className="absolute -bottom-[2px] left-0 w-12 h-[2px] bg-[#E5252A]" />
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
           <button
             onClick={() => onOpenSocialModal('Instagram')}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 text-white hover:bg-black transition-all text-xs font-bold"
+            className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-slate-900 text-white hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-bold w-full min-w-0"
             title="Instagram @officiallibertamedia"
           >
             <span>Instagram</span>
-            <span className="text-[9px] font-normal text-slate-400 font-mono">@officiallibertamedia</span>
+            <span className="text-[10px] font-normal text-slate-400 font-mono truncate w-full text-center">
+              @officiallibertamedia
+            </span>
           </button>
 
           <button
             onClick={() => onOpenSocialModal('Threads')}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 text-white hover:bg-black transition-all text-xs font-bold"
+            className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-slate-900 text-white hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-bold w-full min-w-0"
             title="Threads @officiallibertamedia"
           >
             <span>Threads</span>
-            <span className="text-[9px] font-normal text-slate-400 font-mono">@officiallibertamedia</span>
+            <span className="text-[10px] font-normal text-slate-400 font-mono truncate w-full text-center">
+              @officiallibertamedia
+            </span>
           </button>
 
           <button
             onClick={() => onOpenSocialModal('X (Twitter)')}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 text-white hover:bg-black transition-all text-xs font-bold"
+            className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-slate-900 text-white hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-bold w-full min-w-0"
             title="X @libertamedia_"
           >
-            <span>X</span>
-            <span className="text-[9px] font-normal text-slate-400 font-mono">@libertamedia_</span>
+            <span>X (Twitter)</span>
+            <span className="text-[10px] font-normal text-slate-400 font-mono truncate w-full text-center">
+              @libertamedia_
+            </span>
           </button>
 
           <button
             onClick={() => onOpenSocialModal('TikTok')}
-            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 text-white hover:bg-black transition-all text-xs font-bold"
+            className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-slate-900 text-white hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-bold w-full min-w-0"
             title="TikTok @libertamedia"
           >
             <span>TikTok</span>
-            <span className="text-[9px] font-normal text-slate-400 font-mono">@libertamedia</span>
+            <span className="text-[10px] font-normal text-slate-400 font-mono truncate w-full text-center">
+              @libertamedia
+            </span>
           </button>
         </div>
       </div>
