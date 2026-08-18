@@ -17,16 +17,20 @@ import { EditorialModal } from './components/EditorialModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastContainer } from './components/ToastContainer';\nimport { SkeletonLoader } from './components/SkeletonLoader';
 import { INITIAL_ARTICLES, MOCK_VIDEOS, INITIAL_POLL } from './data/mockArticles';
 import { Article, CategoryType, VideoItem, CitizenSubmission } from './types';
 import { api } from './services/api';
-import { CheckCircle2, Flame, Filter, ChevronRight, PenSquare, RefreshCw } from 'lucide-react';
+import { Filter, ChevronRight, Flame } from 'lucide-react';
+import { useLocalStorage, useToast, useFetch } from './hooks';
+import { AppContext } from './context/AppContext';
 
 export default function App() {
+  // State management with custom hooks
   const [articles, setArticles] = useState<Article[]>(INITIAL_ARTICLES);
   const [videos] = useState<VideoItem[]>(MOCK_VIDEOS);
   const [poll] = useState(INITIAL_POLL);
-  const [isLoadingArticles, setIsLoadingArticles] = useState(true);
 
   // Filter & Active Navigation
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('Semua');
@@ -47,57 +51,48 @@ export default function App() {
   // Typography accessibility
   const [fontSize, setFontSize] = useState<'normal' | 'large'>('normal');
 
-  // Bookmarks persistence
-  const [savedArticleIds, setSavedArticleIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('liberta_saved_articles');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Custom hooks
+  const [savedArticleIds, setSavedArticleIds] = useLocalStorage<string[]>('liberta_saved_articles', []);
+  const { toasts, addToast, removeToast } = useToast();
+  const { data: liveArticles, loading: isLoadingArticles, refetch: refetchArticles } = useFetch(
+    () => api.getArticles(),
+    []\n  );
 
   // Citizen submissions
   const [submissions, setSubmissions] = useState<CitizenSubmission[]>([]);
 
-  // Toast Notification
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  // Fetch articles from backend
-  const fetchLiveArticles = useCallback(async () => {
-    try {
-      const data = await api.getArticles();
-      setArticles(data);
-    } catch (err) {
-      console.warn('Fallback to local state:', err);
-    } finally {
-      setIsLoadingArticles(false);
-    }
-  }, []);
-
-  // Fetch submissions count for editorial badge
+  // Fetch submissions
   const fetchSubmissions = useCallback(async () => {
     try {
       const data = await api.getSubmissions();
       setSubmissions(data);
     } catch (err) {
-      console.warn(err);
+      console.warn('Failed to fetch submissions:', err);
+      addToast('Gagal memuat submissions', 'error');
     }
-  }, []);
+  }, [addToast]);
 
+  // Update articles when live articles are fetched
   useEffect(() => {
-    fetchLiveArticles();
+    if (liveArticles && liveArticles.length > 0) {
+      setArticles(liveArticles);
+    }
+  }, [liveArticles]);
+
+  // Initial fetch
+  useEffect(() => {
+    refetchArticles();
     fetchSubmissions();
-  }, [fetchLiveArticles, fetchSubmissions]);
+  }, [refetchArticles, fetchSubmissions]);
 
   // Check URL query param ?admin=true or secret shortcut (⌘+Shift+A) or direct article link /berita/:id
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     if (window.location.search.includes('admin=true') || window.location.hash.includes('admin')) {
       setIsAdminOpen(true);
     }
-    const match = window.location.pathname.match(/\/berita\/(.+)/);
-    if (match && match[1]) {
+    const match = window.location.pathname.match(/\\/berita\\/(.+)/);\n    if (match && match[1]) {
       const artId = match[1];
       const found = articles.find((a) => a.id === artId);
       if (found) setSelectedArticle(found);
@@ -135,26 +130,23 @@ export default function App() {
     let updated: string[];
     if (savedArticleIds.includes(articleId)) {
       updated = savedArticleIds.filter((id) => id !== articleId);
-      showToast('Artikel dihapus dari daftar tersimpan');
+      addToast('Artikel dihapus dari daftar tersimpan', 'info');
     } else {
       updated = [...savedArticleIds, articleId];
-      showToast('Artikel berhasil disimpan ke daftar bacaan!');
+      addToast('Artikel berhasil disimpan ke daftar bacaan!', 'success');
     }
     setSavedArticleIds(updated);
-    localStorage.setItem('liberta_saved_articles', JSON.stringify(updated));
   };
 
   const handleRemoveBookmark = (articleId: string) => {
     const updated = savedArticleIds.filter((id) => id !== articleId);
     setSavedArticleIds(updated);
-    localStorage.setItem('liberta_saved_articles', JSON.stringify(updated));
-    showToast('Artikel dihapus dari simpanan');
+    addToast('Artikel dihapus dari simpanan', 'info');
   };
 
   const handleClearAllBookmarks = () => {
     setSavedArticleIds([]);
-    localStorage.removeItem('liberta_saved_articles');
-    showToast('Semua artikel tersimpan telah dibersihkan');
+    addToast('Semua artikel tersimpan telah dibersihkan', 'success');
   };
 
   const handlePlayAudio = (article: Article, e: React.MouseEvent) => {
@@ -164,14 +156,14 @@ export default function App() {
 
   const handleCitizenSubmit = (submission: CitizenSubmission) => {
     setSubmissions([submission, ...submissions]);
-    showToast('Naskah berhasil dikirim ke Dewan Redaksi!');
+    addToast('Naskah berhasil dikirim ke Dewan Redaksi!', 'success');
   };
 
   const handleArticleCreated = (newArt: Article) => {
     setArticles((prev) => [newArt, ...prev.filter((a) => a.id !== newArt.id)]);
-    fetchLiveArticles();
+    refetchArticles();
     fetchSubmissions();
-    showToast('Artikel berhasil dipublikasikan ke situs!');
+    addToast('Artikel berhasil dipublikasikan ke situs!', 'success');
   };
 
   const handleArticleDeleted = (deletedId: string) => {
@@ -179,7 +171,7 @@ export default function App() {
     if (selectedArticle?.id === deletedId) {
       setSelectedArticle(null);
     }
-    showToast('Artikel berhasil dihapus');
+    addToast('Artikel berhasil dihapus', 'success');
   };
 
   const handleScrollToSection = (sectionId: string) => {
@@ -219,308 +211,15 @@ export default function App() {
 
   if (isAdminOpen || isStandaloneAdminRoute) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-        <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <a
-              href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                setIsAdminOpen(false);
-                window.history.pushState({}, '', '/');
-              }}
-              className="text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 border border-slate-700"
-            >
-              ← Kembali ke Website Utama (libertamedia.com)
-            </a>
-          </div>
-          <div className="text-xs font-bold text-emerald-400 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Standalone Admin Portal Active
-          </div>
-        </div>
-
-        <div className="flex-1 p-2 md:p-6 flex items-center justify-center">
-          <AdminDashboard
-            isOpen={true}
-            onClose={() => {
-              setIsAdminOpen(false);
-              window.history.pushState({}, '', '/');
-            }}
-            articles={articles}
-            onArticlesChange={fetchLiveArticles}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased flex flex-col ${
-      fontSize === 'large' ? 'text-base' : 'text-sm'
-    }`}>
-      
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-top duration-200">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* 1. Top Bar */}
-      <TopBar 
-        fontSize={fontSize} 
-        setFontSize={setFontSize}
-        onOpenAdmin={() => setIsAdminOpen(true)}
-      />
-
-      {/* 2. Main Header */}
-      <Header
-        onOpenSearch={() => setIsSearchOpen(true)}
-        onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
-        onOpenBookmarks={() => setIsBookmarksOpen(true)}
-        bookmarkCount={savedArticleIds.length}
-        onOpenNewsletter={() => setIsNewsletterOpen(true)}
-        onResetView={handleResetView}
-        onOpenAdmin={() => setIsAdminOpen(true)}
-      />
-
-      {/* 3. Main Navigation */}
-      <Navbar
-        selectedCategory={selectedCategory}
-        onSelectCategory={(cat) => {
-          setSelectedCategory(cat);
-          setActiveTag(null);
-        }}
-        onScrollToSection={handleScrollToSection}
-        onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
-      />
-
-      {/* Main Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-10">
-        
-        {/* Active Tag Filter Banner */}
-        {activeTag && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-red-900">
-              <Filter className="w-4 h-4 text-[#E5252A]" />
-              <span>Menampilkan berita dengan topik: <strong>#{activeTag}</strong> ({filteredArticles.length} artikel)</span>
-            </div>
-            <button
-              onClick={() => setActiveTag(null)}
-              className="text-xs text-red-700 hover:text-red-900 font-bold underline"
-            >
-              Hapus Filter Topik
-            </button>
-          </div>
-        )}
-
-        {/* Hero Section (When viewing all categories or News) */}
-        {selectedCategory === 'Semua' && !activeTag && (
-          <HeroSection
-            articles={articles}
-            onSelectArticle={(art) => setSelectedArticle(art)}
-            savedArticleIds={savedArticleIds}
-            onToggleSave={handleToggleSave}
-            onPlayAudio={handlePlayAudio}
-            onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
-          />
-        )}
-
-        {/* Two Column Layout: Main Content (Left) + Sidebar (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Left Column (2 cols): Cerita, Internasional, or Filtered View */}
-          <div className="lg:col-span-2 space-y-10">
-            
-            {/* If a specific category or tag filter is selected, show filtered stream */}
-            {(selectedCategory !== 'Semua' || activeTag) ? (
-              <section className="space-y-6">
-                <div className="flex items-center justify-between border-b-2 border-slate-200 pb-3 relative">
-                  <div className="flex items-center gap-2">
-                    <Flame className="w-5 h-5 text-[#E5252A]" />
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                      Kanal: {activeTag ? `#${activeTag}` : selectedCategory}
-                    </h2>
-                  </div>
-                  <span className="text-xs text-slate-500 font-semibold">
-                    {filteredArticles.length} Berita Ditemukan
-                  </span>
-                  <div className="absolute -bottom-[2px] left-0 w-20 h-[2px] bg-[#E5252A]" />
-                </div>
-
-                {filteredArticles.length === 0 ? (
-                  <div className="bg-white rounded-xl p-8 text-center text-slate-400 border border-slate-200 space-y-3">
-                    <p className="text-sm font-semibold text-slate-600">Belum ada berita pada kanal ini.</p>
-                    <div className="flex items-center justify-center gap-3 pt-1">
-                      <button
-                        onClick={handleResetView}
-                        className="text-xs text-[#E5252A] hover:underline font-bold"
-                      >
-                        Lihat Semua Berita
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {filteredArticles.map((art) => (
-                      <article
-                        key={art.id}
-                        onClick={() => setSelectedArticle(art)}
-                        className="group bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-red-300 transition-all cursor-pointer flex flex-col sm:flex-row gap-4 items-start"
-                      >
-                        <div className="w-full sm:w-48 h-36 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
-                          <img
-                            src={art.image}
-                            alt={art.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="bg-[#E5252A] text-white text-[9px] font-black uppercase px-2 py-0.5 rounded">
-                              {art.category}
-                            </span>
-                            <span className="text-xs text-slate-400">{art.publishedAt}</span>
-                          </div>
-                          <h3 className="text-sm sm:text-base font-black text-slate-900 group-hover:text-[#E5252A] leading-snug">
-                            {art.title}
-                          </h3>
-                          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                            {art.summary}
-                          </p>
-                          <div className="pt-2 flex items-center justify-between text-[11px] text-slate-500">
-                            <span>Oleh: <strong>{art.author.name}</strong></span>
-                            <span className="text-[#E5252A] font-bold flex items-center gap-1">
-                              Baca <ChevronRight className="w-3 h-3" />
-                            </span>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            ) : (
-              <>
-                {/* 1. Cerita Pilihan & Opini Section */}
-                <CeritaSection
-                  articles={articles}
-                  onSelectArticle={(art) => setSelectedArticle(art)}
-                  onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
-                />
-
-                {/* 2. Kabar Internasional Section */}
-                <InternasionalSection
-                  articles={articles}
-                  onSelectArticle={(art) => setSelectedArticle(art)}
-                />
-              </>
-            )}
-
-          </div>
-
-          {/* Right Column (1 col): Trending, Poll, Social, Tag Cloud */}
-          <div className="lg:col-span-1">
-            <TrendingSidebar
-              articles={articles}
-              poll={poll}
-              onSelectArticle={(art) => setSelectedArticle(art)}
-              onSelectTag={(tag) => setActiveTag(tag)}
-              onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
-              onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
-            />
-          </div>
-
-        </div>
-
-      </main>
-
-      {/* Footer */}
-      <Footer
-        onSelectCategory={(cat) => {
-          setSelectedCategory(cat);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
-        onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
-      />
-
-      {/* Floating Audio Player */}
-      <AudioPlayerBar
-        article={audioArticle}
-        onClose={() => setAudioArticle(null)}
-      />
-
-      {/* Full Article Modal / Reader View */}
-      <ArticleModal
-        article={selectedArticle}
-        onClose={() => setSelectedArticle(null)}
-        onSelectArticle={(art) => setSelectedArticle(art)}
-        allArticles={articles}
-        savedArticleIds={savedArticleIds}
-        onToggleSave={handleToggleSave}
-        fontSize={fontSize}
-      />
-
-      {/* Editorial & CMS Modal */}
-      <EditorialModal
-        isOpen={isEditorialOpen}
-        onClose={() => setIsEditorialOpen(false)}
-        onArticleCreated={handleArticleCreated}
-        onArticleDeleted={handleArticleDeleted}
-        publishedArticles={articles}
-        onOpenArticle={(art) => setSelectedArticle(art)}
-        onRefreshArticles={fetchLiveArticles}
-      />
-
-      {/* Submit Story Modal */}
-      <SubmitStoryModal
-        isOpen={isSubmitStoryOpen}
-        onClose={() => setIsSubmitStoryOpen(false)}
-        onSubmit={handleCitizenSubmit}
-      />
-
-      {/* Search Modal */}
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        articles={articles}
-        onSelectArticle={(art) => setSelectedArticle(art)}
-      />
-
-      {/* Bookmark Drawer */}
-      <BookmarkDrawer
-        isOpen={isBookmarksOpen}
-        onClose={() => setIsBookmarksOpen(false)}
-        savedArticleIds={savedArticleIds}
-        allArticles={articles}
-        onSelectArticle={(art) => setSelectedArticle(art)}
-        onRemoveBookmark={handleRemoveBookmark}
-        onClearAllBookmarks={handleClearAllBookmarks}
-      />
-
-      {/* Video Modal */}
-      <VideoModal
-        video={selectedVideo}
-        onClose={() => setSelectedVideo(null)}
-        allVideos={videos}
-        onSelectOtherVideo={(v) => setSelectedVideo(v)}
-      />
-
-      {/* Social Platform Modal */}
-      <SocialPlatformModal
-        platform={selectedSocialPlatform}
-        onClose={() => setSelectedSocialPlatform(null)}
-      />
-
-      {/* Newsletter Modal */}
-      <NewsletterModal
-        isOpen={isNewsletterOpen}
-        onClose={() => setIsNewsletterOpen(false)}
-      />
-
-    </div>
-  );
-}
+      <ErrorBoundary>
+        <div className=\"min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans\">
+          <div className=\"bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between\">
+            <div className=\"flex items-center gap-3\">
+              <a
+                href=\"/\"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsAdminOpen(false);
+                  window.history.pushState({}, '', '/');
+                }}
+                className=\"text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 border border-slate-700\"\n              >\n                ← Kembali ke Website Utama (libertamedia.com)\n              </a>\n            </div>\n            <div className=\"text-xs font-bold text-emerald-400 flex items-center gap-2\">\n              <span className=\"w-2 h-2 rounded-full bg-emerald-400 animate-pulse\" />\n              Standalone Admin Portal Active\n            </div>\n          </div>\n\n          <div className=\"flex-1 p-2 md:p-6 flex items-center justify-center\">\n            <AdminDashboard\n              isOpen={true}\n              onClose={() => {\n                setIsAdminOpen(false);\n                window.history.pushState({}, '', '/');\n              }}\n              articles={articles}\n              onArticlesChange={refetchArticles}\n            />\n          </div>\n        </div>\n      </ErrorBoundary>\n    );\n  }\n\n  return (\n    <ErrorBoundary>\n      <AppContext.Provider value={{ toasts, addToast, removeToast }}>\n        <div\n          className={`min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans antialiased flex flex-col ${\n            fontSize === 'large' ? 'text-base' : 'text-sm'\n          }`}\n        >\n          {/* Toast Notifications */}\n          <ToastContainer toasts={toasts} onRemove={removeToast} />\n\n          {/* 1. Top Bar */}\n          <TopBar\n            fontSize={fontSize}\n            setFontSize={setFontSize}\n            onOpenAdmin={() => setIsAdminOpen(true)}\n          />\n\n          {/* 2. Main Header */}\n          <Header\n            onOpenSearch={() => setIsSearchOpen(true)}\n            onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}\n            onOpenBookmarks={() => setIsBookmarksOpen(true)}\n            bookmarkCount={savedArticleIds.length}\n            onOpenNewsletter={() => setIsNewsletterOpen(true)}\n            onResetView={handleResetView}\n            onOpenAdmin={() => setIsAdminOpen(true)}\n          />\n\n          {/* 3. Main Navigation */}\n          <Navbar\n            selectedCategory={selectedCategory}\n            onSelectCategory={(cat) => {\n              setSelectedCategory(cat);\n              setActiveTag(null);\n            }}\n            onScrollToSection={handleScrollToSection}\n            onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}\n          />\n\n          {/* Main Content Body */}\n          <main className=\"flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-10\">\n            {/* Loading State */}\n            {isLoadingArticles && <SkeletonLoader count={3} />}\n\n            {/* Active Tag Filter Banner */}\n            {activeTag && (\n              <div className=\"bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-center justify-between\" role=\"status\" aria-live=\"polite\">\n                <div className=\"flex items-center gap-2 text-xs text-red-900\">\n                  <Filter className=\"w-4 h-4 text-[#E5252A]\" aria-hidden=\"true\" />\n                  <span>Menampilkan berita dengan topik: <strong>#{activeTag}</strong> ({filteredArticles.length} artikel)</span>\n                </div>\n                <button\n                  onClick={() => setActiveTag(null)}\n                  className=\"text-xs text-red-700 hover:text-red-900 font-bold underline focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1\"\n                  aria-label=\"Hapus filter topik\"\n                >\n                  Hapus Filter Topik\n                </button>\n              </div>\n            )}\n\n            {/* Hero Section (When viewing all categories or News) */}\n            {selectedCategory === 'Semua' && !activeTag && !isLoadingArticles && (\n              <HeroSection\n                articles={articles}\n                onSelectArticle={(art) => setSelectedArticle(art)}\n                savedArticleIds={savedArticleIds}\n                onToggleSave={handleToggleSave}\n                onPlayAudio={handlePlayAudio}\n                onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}\n              />\n            )}\n\n            {/* Two Column Layout: Main Content (Left) + Sidebar (Right) */}\n            {!isLoadingArticles && (\n              <div className=\"grid grid-cols-1 lg:grid-cols-3 gap-8\">\n                {/* Left Column (2 cols): Cerita, Internasional, or Filtered View */}\n                <div className=\"lg:col-span-2 space-y-10\">\n                  {/* If a specific category or tag filter is selected, show filtered stream */}\n                  {(selectedCategory !== 'Semua' || activeTag) ? (\n                    <section className=\"space-y-6\">\n                      <div className=\"flex items-center justify-between border-b-2 border-slate-200 pb-3 relative\">\n                        <div className=\"flex items-center gap-2\">\n                          <Flame className=\"w-5 h-5 text-[#E5252A]\" aria-hidden=\"true\" />\n                          <h2 className=\"text-xl font-black text-slate-900 tracking-tight\">\n                            Kanal: {activeTag ? `#${activeTag}` : selectedCategory}\n                          </h2>\n                        </div>\n                        <span className=\"text-xs text-slate-500 font-semibold\">\n                          {filteredArticles.length} Berita Ditemukan\n                        </span>\n                        <div className=\"absolute -bottom-[2px] left-0 w-20 h-[2px] bg-[#E5252A]\" aria-hidden=\"true\" />\n                      </div>\n\n                      {filteredArticles.length === 0 ? (\n                        <div className=\"bg-white rounded-xl p-8 text-center text-slate-400 border border-slate-200 space-y-3\" role=\"status\">\n                          <p className=\"text-sm font-semibold text-slate-600\">Belum ada berita pada kanal ini.</p>\n                          <div className=\"flex items-center justify-center gap-3 pt-1\">\n                            <button\n                              onClick={handleResetView}\n                              className=\"text-xs text-[#E5252A] hover:underline font-bold focus:outline-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1\"\n                              aria-label=\"Lihat semua berita\"\n                            >\n                              Lihat Semua Berita\n                            </button>\n                          </div>\n                        </div>\n                      ) : (\n                        <div className=\"space-y-4\">\n                          {filteredArticles.map((art) => (\n                            <article\n                              key={art.id}\n                              onClick={() => setSelectedArticle(art)}\n                              className=\"group bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-red-300 transition-all cursor-pointer flex flex-col sm:flex-row gap-4 focus:outline-none focus:ring-2 focus:ring-blue-500\"\n                              role=\"button\"\n                              tabIndex={0}\n                              onKeyDown={(e) => {\n                                if (e.key === 'Enter' || e.key === ' ') {\n                                  e.preventDefault();\n                                  setSelectedArticle(art);\n                                }\n                              }}\n                              aria-label={`Baca artikel: ${art.title}`}\n                            >\n                              <div className=\"w-full sm:w-48 h-36 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0\">\n                                <img\n                                  src={art.image}\n                                  alt={art.title}\n                                  className=\"w-full h-full object-cover group-hover:scale-105 transition-transform duration-300\"\n                                  loading=\"lazy\"\n                                />\n                              </div>\n                              <div className=\"flex-1 space-y-2\">\n                                <div className=\"flex items-center gap-2\">\n                                  <span className=\"bg-[#E5252A] text-white text-[9px] font-black uppercase px-2 py-0.5 rounded\">\n                                    {art.category}\n                                  </span>\n                                  <span className=\"text-xs text-slate-400\">{art.publishedAt}</span>\n                                </div>\n                                <h3 className=\"text-sm sm:text-base font-black text-slate-900 group-hover:text-[#E5252A] leading-snug\">\n                                  {art.title}\n                                </h3>\n                                <p className=\"text-xs text-slate-600 line-clamp-2 leading-relaxed\">\n                                  {art.summary}\n                                </p>\n                                <div className=\"pt-2 flex items-center justify-between text-[11px] text-slate-500\">\n                                  <span>Oleh: <strong>{art.author.name}</strong></span>\n                                  <span className=\"text-[#E5252A] font-bold flex items-center gap-1\">\n                                    Baca <ChevronRight className=\"w-3 h-3\" aria-hidden=\"true\" />\n                                  </span>\n                                </div>\n                              </div>\n                            </article>\n                          ))}\n                        </div>\n                      )}\n                    </section>\n                  ) : (\n                    <>\n                      {/* 1. Cerita Pilihan & Opini Section */}\n                      <CeritaSection\n                        articles={articles}\n                        onSelectArticle={(art) => setSelectedArticle(art)}\n                        onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}\n                      />\n\n                      {/* 2. Kabar Internasional Section */}\n                      <InternasionalSection\n                        articles={articles}\n                        onSelectArticle={(art) => setSelectedArticle(art)}\n                      />\n                    </>\n                  )}\n                </div>\n\n                {/* Right Column (1 col): Trending, Poll, Social, Tag Cloud */}\n                <div className=\"lg:col-span-1\">\n                  <TrendingSidebar\n                    articles={articles}\n                    poll={poll}\n                    onSelectArticle={(art) => setSelectedArticle(art)}\n                    onSelectTag={(tag) => setActiveTag(tag)}\n                    onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}\n                    onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}\n                  />\n                </div>\n              </div>\n            )}\n          </main>\n\n          {/* Footer */}\n          <Footer\n            onSelectCategory={(cat) => {\n              setSelectedCategory(cat);\n              window.scrollTo({ top: 0, behavior: 'smooth' });\n            }}\n            onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}\n            onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}\n          />\n\n          {/* Floating Audio Player */}\n          <AudioPlayerBar\n            article={audioArticle}\n            onClose={() => setAudioArticle(null)}\n          />\n\n          {/* Full Article Modal / Reader View */}\n          <ArticleModal\n            article={selectedArticle}\n            onClose={() => setSelectedArticle(null)}\n            onSelectArticle={(art) => setSelectedArticle(art)}\n            allArticles={articles}\n            savedArticleIds={savedArticleIds}\n            onToggleSave={handleToggleSave}\n            fontSize={fontSize}\n          />\n\n          {/* Editorial & CMS Modal */}\n          <EditorialModal\n            isOpen={isEditorialOpen}\n            onClose={() => setIsEditorialOpen(false)}\n            onArticleCreated={handleArticleCreated}\n            onArticleDeleted={handleArticleDeleted}\n            publishedArticles={articles}\n            onOpenArticle={(art) => setSelectedArticle(art)}\n            onRefreshArticles={refetchArticles}\n          />\n\n          {/* Submit Story Modal */}\n          <SubmitStoryModal\n            isOpen={isSubmitStoryOpen}\n            onClose={() => setIsSubmitStoryOpen(false)}\n            onSubmit={handleCitizenSubmit}\n          />\n\n          {/* Search Modal */}\n          <SearchModal\n            isOpen={isSearchOpen}\n            onClose={() => setIsSearchOpen(false)}\n            articles={articles}\n            onSelectArticle={(art) => setSelectedArticle(art)}\n          />\n\n          {/* Bookmark Drawer */}\n          <BookmarkDrawer\n            isOpen={isBookmarksOpen}\n            onClose={() => setIsBookmarksOpen(false)}\n            savedArticleIds={savedArticleIds}\n            allArticles={articles}\n            onSelectArticle={(art) => setSelectedArticle(art)}\n            onRemoveBookmark={handleRemoveBookmark}\n            onClearAllBookmarks={handleClearAllBookmarks}\n          />\n\n          {/* Video Modal */}\n          <VideoModal\n            video={selectedVideo}\n            onClose={() => setSelectedVideo(null)}\n            allVideos={videos}\n            onSelectOtherVideo={(v) => setSelectedVideo(v)}\n          />\n\n          {/* Social Platform Modal */}\n          <SocialPlatformModal\n            platform={selectedSocialPlatform}\n            onClose={() => setSelectedSocialPlatform(null)}\n          />\n\n          {/* Newsletter Modal */}\n          <NewsletterModal\n            isOpen={isNewsletterOpen}\n            onClose={() => setIsNewsletterOpen(false)}\n          />\n        </div>\n      </AppContext.Provider>\n    </ErrorBoundary>\n  );\n}
