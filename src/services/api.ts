@@ -9,6 +9,8 @@ export interface ServerStats {
   serverTime: string;
 }
 
+let tokenCache: string | null = typeof window !== 'undefined' ? sessionStorage.getItem('liberta_admin_token') : null;
+
 async function safeJsonResponse(res: Response): Promise<any> {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
