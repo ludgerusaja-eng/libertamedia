@@ -9,12 +9,51 @@ export interface ServerStats {
   serverTime: string;
 }
 
-let tokenCache: string | null = typeof window !== 'undefined' ? sessionStorage.getItem('liberta_admin_token') : null;
+let _tokenCache: string | null = typeof window !== 'undefined' ? sessionStorage.getItem('liberta_admin_token') : null;
+
+function getAdminToken(): string | null {
+  if (!_tokenCache && typeof window !== 'undefined') {
+    try {
+      _tokenCache = sessionStorage.getItem('liberta_admin_token');
+    } catch (e) {}
+  }
+  if (!_tokenCache) {
+    _tokenCache = `local-admin-token-${Date.now()}`;
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem('liberta_admin_token', _tokenCache);
+      } catch (e) {}
+    }
+  }
+  return _tokenCache;
+}
+
+function setAdminToken(token: string | null): void {
+  _tokenCache = token;
+  if (typeof window !== 'undefined') {
+    try {
+      if (token) {
+        sessionStorage.setItem('liberta_admin_token', token);
+      } else {
+        sessionStorage.removeItem('liberta_admin_token');
+      }
+    } catch (e) {}
+  }
+}
+
+function getAdminAuthHeaders(): Record<string, string> {
+  const token = getAdminToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['X-Admin-Token'] = token;
+  }
+  return headers;
+}
 
 async function safeJsonResponse(res: Response): Promise<any> {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    const text = await res.text();
     if (res.status === 401 || res.status === 403) {
       throw new Error('Sesi autentikasi telah berakhir. Silakan login kembali.');
     }
@@ -25,35 +64,15 @@ async function safeJsonResponse(res: Response): Promise<any> {
 
 export const api = {
   setAuthToken(token: string | null) {
-    tokenCache = token;
-    if (token) {
-      sessionStorage.setItem('liberta_admin_token', token);
-    } else {
-      sessionStorage.removeItem('liberta_admin_token');
-    }
+    setAdminToken(token);
   },
 
   getAuthToken(): string | null {
-    if (!tokenCache && typeof window !== 'undefined') {
-      tokenCache = sessionStorage.getItem('liberta_admin_token');
-    }
-    if (!tokenCache) {
-      tokenCache = `local-admin-token-${Date.now()}`;
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('liberta_admin_token', tokenCache);
-      }
-    }
-    return tokenCache;
+    return getAdminToken();
   },
 
   getAuthHeaders(): Record<string, string> {
-    const token = this.getAuthToken();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-      headers['X-Admin-Token'] = token;
-    }
-    return headers;
+    return getAdminAuthHeaders();
   },
 
   // Auth: Login with password
@@ -67,7 +86,7 @@ export const api = {
       if (res.ok) {
         const data = await safeJsonResponse(res);
         if (data.token) {
-          this.setAuthToken(data.token);
+          setAdminToken(data.token);
         }
         return data;
       }
@@ -75,7 +94,7 @@ export const api = {
 
     if (password === 'libertamedia2026' || password === 'admin123') {
       const token = `local-admin-token-${Date.now()}`;
-      this.setAuthToken(token);
+      setAdminToken(token);
       return { success: true, token };
     }
     throw new Error('Password Admin tidak valid');
@@ -83,9 +102,9 @@ export const api = {
 
   // Auth: Logout
   async logout() {
-    const headers = this.getAuthHeaders();
+    const headers = getAdminAuthHeaders();
     await fetch('/api/auth/logout', { method: 'POST', headers }).catch(() => {});
-    this.setAuthToken(null);
+    setAdminToken(null);
   },
 
   // 1. Fetch articles
@@ -99,7 +118,7 @@ export const api = {
 
       const res = await fetch(`/api/articles?${searchParams.toString()}`);
       if (!res.ok) throw new Error('Gagal mengambil data artikel');
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data || [];
     } catch (err) {
       console.warn('API getArticles fallback:', err);
@@ -112,7 +131,7 @@ export const api = {
     try {
       const res = await fetch(`/api/articles/${id}`);
       if (!res.ok) throw new Error('Artikel tidak ditemukan');
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data;
     } catch (err) {
       console.warn('API getArticleById fallback:', err);
@@ -124,14 +143,14 @@ export const api = {
   async createArticle(articleData: Partial<Article>): Promise<Article> {
     const res = await fetch('/api/articles', {
       method: 'POST',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
       body: JSON.stringify(articleData),
     });
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
+      const errData = await safeJsonResponse(res).catch(() => ({}));
       throw new Error(errData.message || 'Gagal menerbitkan artikel');
     }
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data.data;
   },
 
@@ -139,11 +158,11 @@ export const api = {
   async updateArticle(id: string, articleData: Partial<Article>): Promise<Article> {
     const res = await fetch(`/api/articles/${id}`, {
       method: 'PUT',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
       body: JSON.stringify(articleData),
     });
     if (!res.ok) throw new Error('Gagal memperbarui artikel');
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data.data;
   },
 
@@ -151,7 +170,7 @@ export const api = {
   async deleteArticle(id: string): Promise<boolean> {
     const res = await fetch(`/api/articles/${id}`, {
       method: 'DELETE',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
     });
     return res.ok;
   },
@@ -165,7 +184,7 @@ export const api = {
         body: JSON.stringify({ type, delta }),
       });
       if (!res.ok) return null;
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.reactions;
     } catch (err) {
       console.warn('Reaction API error:', err);
@@ -181,7 +200,7 @@ export const api = {
       body: JSON.stringify({ author, content }),
     });
     if (!res.ok) throw new Error('Gagal mengirim komentar');
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data;
   },
 
@@ -190,7 +209,7 @@ export const api = {
     try {
       const res = await fetch('/api/submissions');
       if (!res.ok) return [];
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data || [];
     } catch (err) {
       console.warn('Get submissions fallback:', err);
@@ -205,24 +224,24 @@ export const api = {
       body: JSON.stringify(submission),
     });
     if (!res.ok) throw new Error('Gagal mengirim tulisan');
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data.data;
   },
 
   async publishSubmission(submissionId: string): Promise<Article> {
     const res = await fetch(`/api/submissions/${submissionId}/publish`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
     });
     if (!res.ok) throw new Error('Gagal menerbitkan naskah warga');
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data.data;
   },
 
   async deleteSubmission(submissionId: string): Promise<boolean> {
     const res = await fetch(`/api/submissions/${submissionId}`, {
       method: 'DELETE',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
     });
     return res.ok;
   },
@@ -232,7 +251,7 @@ export const api = {
     try {
       const res = await fetch('/api/stats');
       if (!res.ok) return null;
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data;
     } catch (err) {
       return null;
@@ -262,11 +281,11 @@ export const api = {
           const imageBase64 = reader.result as string;
           const res = await fetch('/api/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAdminAuthHeaders(),
             body: JSON.stringify({ imageBase64 }),
           });
           if (!res.ok) throw new Error('Gagal meng-upload gambar ke server');
-          const data = await res.json();
+          const data = await safeJsonResponse(res);
           resolve(data.url);
         } catch (err: any) {
           reject(err);
@@ -282,7 +301,7 @@ export const api = {
     try {
       const res = await fetch('/api/settings');
       if (!res.ok) return null;
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data;
     } catch (err) {
       console.warn('API getSettings fallback:', err);
@@ -293,11 +312,11 @@ export const api = {
   async saveSettings(settingsData: any): Promise<any> {
     const res = await fetch('/api/settings', {
       method: 'POST',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
       body: JSON.stringify(settingsData),
     });
     if (!res.ok) throw new Error('Gagal menyimpan pengaturan website');
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data.data;
   },
 
@@ -306,7 +325,7 @@ export const api = {
     try {
       const res = await fetch('/api/pages');
       if (!res.ok) return [];
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data || [];
     } catch (err) {
       console.warn('API getPages fallback:', err);
@@ -318,7 +337,7 @@ export const api = {
     try {
       const res = await fetch(`/api/pages/${slug}`);
       if (!res.ok) return null;
-      const data = await res.json();
+      const data = await safeJsonResponse(res);
       return data.data;
     } catch (err) {
       console.warn('API getPageBySlug fallback:', err);
@@ -331,18 +350,18 @@ export const api = {
     const url = pageData.id ? `/api/pages/${pageData.id}` : '/api/pages';
     const res = await fetch(url, {
       method,
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
       body: JSON.stringify(pageData),
     });
     if (!res.ok) throw new Error('Gagal menyimpan halaman statis');
-    const data = await res.json();
+    const data = await safeJsonResponse(res);
     return data.data;
   },
 
   async deletePage(id: string): Promise<boolean> {
     const res = await fetch(`/api/pages/${id}`, {
       method: 'DELETE',
-      headers: this.getAuthHeaders(),
+      headers: getAdminAuthHeaders(),
     });
     return res.ok;
   },
