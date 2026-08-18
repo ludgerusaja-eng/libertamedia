@@ -1,13 +1,13 @@
 ---
 deployment:
   tasks:
+    - export DEPLOYPATH=/home/libp7469/public_html
+    - /bin/cp -f dist/index.html $DEPLOYPATH/index.html
+    - /bin/mkdir -p $DEPLOYPATH/assets
+    - /bin/cp -Rf dist/assets/* $DEPLOYPATH/assets/
     - /bin/mkdir -p /home/libp7469/libertamedia/dist
     - /bin/cp -Rf dist/* /home/libp7469/libertamedia/dist/
     - /bin/cp -f app.js /home/libp7469/libertamedia/app.js
     - /bin/cp -f package.json /home/libp7469/libertamedia/package.json
-    - /bin/cp -Rf data /home/libp7469/libertamedia/
-    - /bin/cp -f dist/index.html /home/libp7469/public_html/index.html
-    - /bin/mkdir -p /home/libp7469/public_html/assets
-    - /bin/cp -Rf dist/assets/* /home/libp7469/public_html/assets/
     - /bin/mkdir -p /home/libp7469/libertamedia/tmp
     - /bin/touch /home/libp7469/libertamedia/tmp/restart.txt
