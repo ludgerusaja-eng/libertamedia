@@ -625,6 +625,13 @@ app.get("/berita/:id", (req, res) => {
  * VITE MIDDLEWARE & STATIC SERVING
  * ----------------------------------------------------------- */
 
+// Guaranteed static serving for JS/CSS assets
+app.use("/assets", (req, res, next) => {
+  const distPath = getDistPath();
+  const assetPath = path.join(distPath, "assets");
+  express.static(assetPath)(req, res, next);
+});
+
 function getDistPath(): string {
   const candidates = [
     path.join(currentDir),
