@@ -382,3 +382,16 @@ export const api = {
     return res.ok;
   },
 };
+
+export const fetchArticles = (params?: any) => api.getArticles(params);
+export const fetchArticleById = (id: string) => api.getArticleById(id);
+export const createArticle = (data: any) => api.createArticle(data);
+export const updateArticle = (id: string, data: any) => api.updateArticle(id, data);
+export const deleteArticle = (id: string) => api.deleteArticle(id);
+export const saveArticle = (data: any) => data.id ? api.updateArticle(data.id, data) : api.createArticle(data);
+export const fetchSubmissions = () => api.getSubmissions();
+export const publishSubmission = (id: string) => api.publishSubmission(id);
+export const deleteSubmission = (id: string) => api.deleteSubmission(id);
+export const fetchSettings = () => api.getSettings();
+export const saveSiteSettings = (settings: any) => api.saveSettings(settings);
+

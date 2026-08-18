@@ -3,6 +3,21 @@ import path from 'path';
 import { DBStructure, IStorageAdapter } from './Repository';
 import { SiteSettings } from '../types';
 
+export const defaultSettings: SiteSettings = {
+  siteName: 'LIBERTAMEDIA',
+  siteTagline: 'Media Untuk Semua • Indeks Berita Publik',
+  footerText: '© 2026 LIBERTAMEDIA. Seluruh hak cipta dilindungi.',
+  socialLinks: { instagram: '', twitter: '', youtube: '', facebook: '' },
+  sections: {
+    showBreakingNews: true,
+    showHeroSlider: true,
+    showEditorChoice: true,
+    showCitizenVoice: true,
+    showNewsletter: true,
+  },
+  monetization: { headerBannerHtml: '', inArticleAdHtml: '', googleAnalyticsId: '' }
+};
+
 export class JsonStorageAdapter implements IStorageAdapter {
   private dataDir: string;
   private dbFile: string;
@@ -24,7 +39,8 @@ export class JsonStorageAdapter implements IStorageAdapter {
         const initialData: DBStructure = {
           articles: [],
           submissions: [],
-          subscribers: []
+          subscribers: [],
+          settings: defaultSettings
         };
         this.writeDatabase(initialData);
         return initialData;
@@ -34,7 +50,7 @@ export class JsonStorageAdapter implements IStorageAdapter {
       return JSON.parse(raw);
     } catch (err) {
       console.error('Error reading db.json, returning safe state:', err);
-      return { articles: [], submissions: [], subscribers: [] };
+      return { articles: [], submissions: [], subscribers: [], settings: defaultSettings };
     }
   }
 
@@ -74,9 +90,24 @@ export class JsonStorageAdapter implements IStorageAdapter {
     }
   }
 
-  public getSettings(): SiteSettings | null {
+  public getSettings(): SiteSettings {
     const db = this.readDatabase();
-    return db.settings || null;
+    return {
+      ...defaultSettings,
+      ...(db.settings || {}),
+      sections: {
+        ...defaultSettings.sections,
+        ...((db.settings && db.settings.sections) || {})
+      },
+      socialLinks: {
+        ...defaultSettings.socialLinks,
+        ...((db.settings && db.settings.socialLinks) || {})
+      },
+      monetization: {
+        ...defaultSettings.monetization,
+        ...((db.settings && db.settings.monetization) || {})
+      }
+    };
   }
 
   public saveSettings(settings: SiteSettings): boolean {

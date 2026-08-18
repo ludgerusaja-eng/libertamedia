@@ -1,4 +1,4 @@
-export type CategoryType = 
+export type CategoryType =
   | 'Semua'
   | 'Pemerintahan'
   | 'Politik'
@@ -10,64 +10,55 @@ export type CategoryType =
   | 'Opini'
   | 'Gagasan'
   | 'Cerita Inspiratif'
-  | 'Internasional'
-  | 'Teknologi';
+  | 'Internasional';
 
-export interface CommentItem {
-  id: string;
-  author: string;
+export interface Author {
+  name: string;
   avatar: string;
-  date: string;
-  content: string;
-  likes: number;
+  role?: string;
+  organization?: string;
+  email?: string;
 }
 
 export interface Article {
   id: string;
-  slug: string;
   title: string;
-  summary: string;
-  content: string[];
+  slug: string;
+  excerpt: string;
+  content: string;
   category: CategoryType;
-  subcategory?: string;
-  pillar: 'news' | 'cerita' | 'internasional';
-  author: {
-    name: string;
-    role: string;
-    avatar: string;
-    institution?: string;
-  };
+  pillar?: 'BERITA' | 'OPINI' | 'CERITA' | 'GAGASAN';
+  imageUrl: string;
+  imageCaption?: string;
+  author: Author;
   publishedAt: string;
   readTime: string;
-  views: number;
-  image: string;
-  caption?: string;
-  tags: string[];
-  isEditorChoice?: boolean;
-  isHero?: boolean;
+  isHeroHeadline?: boolean;
+  isEditorsPick?: boolean;
   isTrending?: boolean;
-  trendingRank?: number;
-  audioDuration?: string;
-  reactions: {
-    claps: number;
-    insightful: number;
-    inspiring: number;
-    critical: number;
-  };
-  aiSummary: string[];
-  comments: CommentItem[];
+  views?: number;
+  tags?: string[];
+  commentsCount?: number;
+  status?: 'PUBLISHED' | 'DRAFT' | 'ARCHIVED';
+  audioUrl?: string;
+}
+
+export interface Comment {
+  id: string;
+  articleId: string;
+  author: string;
+  content: string;
+  createdAt: string;
 }
 
 export interface VideoItem {
   id: string;
   title: string;
-  category: string;
+  youtubeId: string;
+  category: CategoryType;
   duration: string;
-  views: string;
   publishedAt: string;
-  thumbnail: string;
-  videoEmbedUrl: string;
-  description: string;
+  views: number;
 }
 
 export interface PollOption {
@@ -79,56 +70,49 @@ export interface PollOption {
 export interface PollData {
   id: string;
   question: string;
-  topic: string;
-  endDate: string;
   options: PollOption[];
+  totalVotes: number;
 }
 
 export interface CitizenSubmission {
   id: string;
-  title: string;
-  category: string;
   authorName: string;
-  email: string;
-  institution: string;
-  abstract: string;
+  authorEmail: string;
+  authorRole?: string;
+  authorOrg?: string;
+  title: string;
+  category: CategoryType;
   content: string;
   submittedAt: string;
 }
 
+export type Submission = CitizenSubmission;
+
 export interface SiteSettings {
   siteName: string;
-  tagline: string;
-  description: string;
-  defaultOgImage: string;
-  copyrightText: string;
+  siteTagline: string;
+  footerText: string;
+  logoUrl?: string;
+  
   socialLinks: {
     instagram: string;
     twitter: string;
     youtube: string;
-    tiktok: string;
     facebook: string;
   };
-  sectionToggles: {
-    breakingNews: boolean;
-    heroSlider: boolean;
-    editorsPicks: boolean;
-    citizenVoice: boolean;
-    multimedia: boolean;
-    newsletter: boolean;
+
+  sections: {
+    showBreakingNews: boolean;
+    showHeroSlider: boolean;
+    showEditorChoice: boolean;
+    showCitizenVoice: boolean;
+    showNewsletter: boolean;
   };
-  cardDisplayStyle: 'grid' | 'list';
-  customCategories: string[];
-  adSlots: {
-    headerBanner: string;
-    inArticleBanner: string;
-    mobileStickyBottom: string;
-  };
-  analyticsScripts: {
-    ga4Id: string;
-    searchConsoleTag: string;
-    facebookPixel: string;
-    customHeadScript: string;
+
+  monetization: {
+    headerBannerHtml: string;
+    inArticleAdHtml: string;
+    googleAnalyticsId: string;
   };
 }
 
@@ -139,4 +123,3 @@ export interface StaticPage {
   content: string;
   updatedAt: string;
 }
-

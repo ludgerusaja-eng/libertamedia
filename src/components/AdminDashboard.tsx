@@ -1,1678 +1,837 @@
 import React, { useState, useEffect } from 'react';
-import {
-  LayoutDashboard,
-  FileText,
-  Inbox,
-  Database,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  Sparkles,
-  Eye,
-  Star,
-  ShieldCheck,
-  X,
-  Image as ImageIcon,
-  Send,
-  Search,
-  Check,
-  AlertCircle,
-  LogOut,
-  Sliders,
-  Globe,
-  Edit,
-  Code,
-  Palette,
-  Megaphone,
-  BookOpen,
-  Share2,
-  Save,
-  RotateCcw,
-  Youtube,
-  Twitter,
-  ExternalLink
+import { 
+  FileText, Settings, DollarSign, Inbox, Save, 
+  Plus, Trash2, Star, Sparkles, CheckCircle2, AlertCircle, LogOut, X,
+  Search, Upload, Edit, Eye, ArrowUpRight
 } from 'lucide-react';
-import { Article, CitizenSubmission, CategoryType, SiteSettings, StaticPage } from '../types';
-import { api } from '../services/api';
+import { Article, Submission, CategoryType, SiteSettings } from '../types';
+import { 
+  fetchArticles, deleteArticle, saveArticle, fetchSubmissions, 
+  publishSubmission, deleteSubmission, saveSiteSettings, uploadImage 
+} from '../services/api';
 
 interface AdminDashboardProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
-  articles: Article[];
-  onArticlesChange: () => void;
+  onLogout?: () => void;
+  articles?: Article[];
+  onArticlesChange?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
-  articles,
+  onLogout = () => {
+    sessionStorage.removeItem('liberta_admin_token');
+    window.location.reload();
+  },
+  articles: propArticles,
   onArticlesChange
 }) => {
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'identity' | 'layout' | 'navigation' | 'ads_analytics' | 'pages' | 'articles' | 'submissions' | 'settings'
-  >('overview');
-
-  const [submissions, setSubmissions] = useState<CitizenSubmission[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filterCategory, setFilterCategory] = useState<string>('Semua');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Site Settings State (Blogger/WordPress Suite)
+  const [activeTab, setActiveTab] = useState<'articles' | 'layout' | 'ads' | 'inbox'>('articles');
+  const [articlesList, setArticlesList] = useState<Article[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [settings, setSettings] = useState<SiteSettings>({
     siteName: 'LIBERTAMEDIA',
-    tagline: 'Media Untuk Semua',
-    description: 'Media dan platform opini independen yang menyuarakan aspirasi publik, mahasiswa, dan masyarakat luas dengan semangat Media Untuk Semua.',
-    defaultOgImage: 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=1200&auto=format&fit=crop',
-    copyrightText: '© 2026 libertamedia.com. Hak Cipta Dilindungi Undang-Undang.',
+    siteTagline: 'Media Untuk Semua • Indeks Berita Publik',
+    footerText: '© 2026 LIBERTAMEDIA. Seluruh hak cipta dilindungi.',
     socialLinks: {
-      instagram: 'https://instagram.com/libertamedia',
-      twitter: 'https://x.com/libertamedia',
-      youtube: 'https://youtube.com/@libertamedia',
-      tiktok: 'https://tiktok.com/@libertamedia',
-      facebook: 'https://facebook.com/libertamedia'
+      instagram: '',
+      twitter: '',
+      youtube: '',
+      facebook: ''
     },
-    sectionToggles: {
-      breakingNews: true,
-      heroSlider: true,
-      editorsPicks: true,
-      citizenVoice: true,
-      multimedia: true,
-      newsletter: true
+    sections: {
+      showBreakingNews: true,
+      showHeroSlider: true,
+      showEditorChoice: true,
+      showCitizenVoice: true,
+      showNewsletter: true
     },
-    cardDisplayStyle: 'grid',
-    customCategories: ['Pemerintahan', 'Politik', 'Mahasiswa', 'Sosial Budaya', 'Ekonomi', 'Olahraga & Seni', 'Organisasi & Komunitas', 'Opini', 'Internasional'],
-    adSlots: {
-      headerBanner: '',
-      inArticleBanner: '',
-      mobileStickyBottom: ''
-    },
-    analyticsScripts: {
-      ga4Id: '',
-      searchConsoleTag: '',
-      facebookPixel: '',
-      customHeadScript: ''
+    monetization: {
+      headerBannerHtml: '',
+      inArticleAdHtml: '',
+      googleAnalyticsId: ''
     }
   });
 
-  // Pages State
-  const [pages, setPages] = useState<StaticPage[]>([]);
-  const [editingPageId, setEditingPageId] = useState<string | null>(null);
-  const [pageSlug, setPageSlug] = useState('');
-  const [pageTitle, setPageTitle] = useState('');
-  const [pageContent, setPageContent] = useState('');
-  const [isEditingPage, setIsEditingPage] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // New & Edit Article Form state
-  const [isCreatingArticle, setIsCreatingArticle] = useState(false);
+  // Article Modal Form State
+  const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState<CategoryType>('Pemerintahan');
-  const [newPillar, setNewPillar] = useState<'news' | 'cerita' | 'internasional'>('news');
-  const [newSummary, setNewSummary] = useState('');
-  const [newContent, setNewContent] = useState('');
-  const [newImage, setNewImage] = useState('');
-  const [newAuthorName, setNewAuthorName] = useState('Dewan Redaksi');
-  const [newAuthorRole, setNewAuthorRole] = useState('Tim Jurnalis Liberta');
-  const [isHero, setIsHero] = useState(false);
-  const [isEditorChoice, setIsEditorChoice] = useState(false);
-  const [isTrending, setIsTrending] = useState(false);
+  const [artTitle, setArtTitle] = useState('');
+  const [artExcerpt, setArtExcerpt] = useState('');
+  const [artContent, setArtContent] = useState('');
+  const [artCategory, setArtCategory] = useState<CategoryType>('Pemerintahan');
+  const [artImageUrl, setArtImageUrl] = useState('');
+  const [artIsHero, setArtIsHero] = useState(false);
+  const [artIsChoice, setArtIsChoice] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Double Confirmation Modal State
-  const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
-    isOpen: boolean;
-    type: 'article' | 'page' | 'submission';
-    id: string;
-    title: string;
-  }>({ isOpen: false, type: 'article', id: '', title: '' });
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
-  // Password Protection state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+  const loadAllData = async () => {
+    setLoading(true);
     try {
-      return sessionStorage.getItem('admin_authenticated') === 'true';
-    } catch (e) {
-      return false;
-    }
-  });
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState(false);
+      const [arts, subs, setsRes] = await Promise.all([
+        fetchArticles(),
+        fetchSubmissions(),
+        fetch('/api/settings').then(res => res.json()).catch(() => null)
+      ]);
+      setArticlesList(arts || propArticles || []);
+      setSubmissions(subs || []);
 
-  // File Upload state
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-
-  // Auto-Save Draft for Article Editor
-  useEffect(() => {
-    if (isCreatingArticle && (newTitle || newContent)) {
-      const timer = setTimeout(() => {
-        try {
-          localStorage.setItem('admin_article_draft', JSON.stringify({
-            newTitle,
-            newCategory,
-            newPillar,
-            newSummary,
-            newContent,
-            newImage,
-            newAuthorName,
-            newAuthorRole,
-            isHero,
-            isEditorChoice,
-            isTrending,
-            savedAt: new Date().toLocaleTimeString()
-          }));
-        } catch (e) {}
-      }, 1000);
-      return () => clearTimeout(timer);
+      if (setsRes) {
+        const data = setsRes.data || setsRes;
+        setSettings({
+          siteName: data.siteName || 'LIBERTAMEDIA',
+          siteTagline: data.siteTagline || data.tagline || 'Media Untuk Semua • Indeks Berita Publik',
+          footerText: data.footerText || data.copyrightText || '© 2026 LIBERTAMEDIA. Seluruh hak cipta dilindungi.',
+          socialLinks: {
+            instagram: data.socialLinks?.instagram || '',
+            twitter: data.socialLinks?.twitter || '',
+            youtube: data.socialLinks?.youtube || '',
+            facebook: data.socialLinks?.facebook || ''
+          },
+          sections: {
+            showBreakingNews: data.sections?.showBreakingNews ?? data.sectionToggles?.breakingNews ?? true,
+            showHeroSlider: data.sections?.showHeroSlider ?? data.sectionToggles?.heroSlider ?? true,
+            showEditorChoice: data.sections?.showEditorChoice ?? data.sectionToggles?.editorsPicks ?? true,
+            showCitizenVoice: data.sections?.showCitizenVoice ?? data.sectionToggles?.citizenVoice ?? true,
+            showNewsletter: data.sections?.showNewsletter ?? data.sectionToggles?.newsletter ?? true,
+          },
+          monetization: {
+            headerBannerHtml: data.monetization?.headerBannerHtml || data.adSlots?.headerBanner || '',
+            inArticleAdHtml: data.monetization?.inArticleAdHtml || data.adSlots?.inArticleBanner || '',
+            googleAnalyticsId: data.monetization?.googleAnalyticsId || data.analyticsScripts?.ga4Id || ''
+          }
+        });
+      }
+    } catch (err) {
+      showToast('Gagal memuat data dashboard', 'error');
+    } finally {
+      setLoading(false);
     }
-  }, [isCreatingArticle, newTitle, newCategory, newPillar, newSummary, newContent, newImage, newAuthorName, newAuthorRole, isHero, isEditorChoice, isTrending]);
+  };
 
   useEffect(() => {
     if (isOpen) {
-      loadSettings();
-      loadPages();
-      loadSubmissions();
+      loadAllData();
     }
   }, [isOpen]);
 
-  const loadSettings = async () => {
+  // Save Settings Handler
+  const handleSaveSettings = async () => {
+    if (!settings) return;
+    setSaving(true);
     try {
-      const data = await api.getSettings();
-      if (data) setSettings(data);
-    } catch (err) {
-      console.warn('Load settings error:', err);
-    }
-  };
-
-  const loadPages = async () => {
-    try {
-      const data = await api.getPages();
-      if (Array.isArray(data)) setPages(data);
-    } catch (err) {
-      console.warn('Load pages error:', err);
-    }
-  };
-
-  const loadSubmissions = async () => {
-    try {
-      const data = await api.getSubmissions();
-      setSubmissions(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.warn('Load submissions error:', err);
-    }
-  };
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  const handleSaveSettingsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      await api.saveSettings(settings);
+      await saveSiteSettings(settings);
       showToast('Pengaturan website berhasil disimpan!');
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan pengaturan');
+      showToast(err.message || 'Gagal menyimpan pengaturan website', 'error');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleOpenCreate = () => {
-    // Check if localStorage draft exists
-    try {
-      const draft = localStorage.getItem('admin_article_draft');
-      if (draft) {
-        const parsed = JSON.parse(draft);
-        if (confirm(`Draf artikel otomatis tersimpan pada ${parsed.savedAt || 'sebelumnya'}. Apakah Anda ingin melanjutkan draf tersebut?`)) {
-          setEditingArticleId(null);
-          setNewTitle(parsed.newTitle || '');
-          setNewCategory(parsed.newCategory || 'Pemerintahan');
-          setNewPillar(parsed.newPillar || 'news');
-          setNewSummary(parsed.newSummary || '');
-          setNewContent(parsed.newContent || '');
-          setNewImage(parsed.newImage || '');
-          setNewAuthorName(parsed.newAuthorName || 'Dewan Redaksi');
-          setNewAuthorRole(parsed.newAuthorRole || 'Tim Jurnalis Liberta');
-          setIsHero(parsed.isHero || false);
-          setIsEditorChoice(parsed.isEditorChoice || false);
-          setIsTrending(parsed.isTrending || false);
-          setIsCreatingArticle(true);
-          return;
-        }
-      }
-    } catch (e) {}
-
-    setEditingArticleId(null);
-    setNewTitle('');
-    setNewCategory('Pemerintahan');
-    setNewPillar('news');
-    setNewSummary('');
-    setNewContent('');
-    setNewImage('');
-    setNewAuthorName('Dewan Redaksi');
-    setNewAuthorRole('Tim Jurnalis Liberta');
-    setIsHero(false);
-    setIsEditorChoice(false);
-    setIsTrending(false);
-    setIsCreatingArticle(true);
-  };
-
-  const handleOpenEdit = (art: Article) => {
-    setEditingArticleId(art.id);
-    setNewTitle(art.title);
-    setNewCategory(art.category);
-    setNewPillar(art.pillar || 'news');
-    setNewSummary(art.summary || '');
-    setNewContent(Array.isArray(art.content) ? art.content.join('\n\n') : art.content || '');
-    setNewImage(art.image || '');
-    setNewAuthorName(art.author?.name || 'Dewan Redaksi');
-    setNewAuthorRole(art.author?.role || 'Tim Jurnalis Liberta');
-    setIsHero(art.isHero || false);
-    setIsEditorChoice(art.isEditorChoice || false);
-    setIsTrending(art.isTrending || false);
-    setIsCreatingArticle(true);
-  };
-
-  const handleSavePageSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pageSlug || !pageTitle || !pageContent) {
-      alert('Slug, Judul, dan Isi Halaman wajib diisi!');
-      return;
-    }
-    try {
-      setLoading(true);
-      await api.savePage({
-        id: editingPageId || undefined,
-        slug: pageSlug,
-        title: pageTitle,
-        content: pageContent
-      });
-      await loadPages();
-      setIsEditingPage(false);
-      setEditingPageId(null);
-      setPageSlug('');
-      setPageTitle('');
-      setPageContent('');
-      showToast('Halaman statis berhasil disimpan!');
-    } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan halaman statis');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      await api.login(passwordInput);
-      setIsAuthenticated(true);
-      try {
-        sessionStorage.setItem('admin_authenticated', 'true');
-      } catch (e) {}
-      setPasswordError(false);
-    } catch (err) {
-      if (passwordInput === 'libertamedia2026' || passwordInput === 'admin123') {
-        setIsAuthenticated(true);
-        try {
-          sessionStorage.setItem('admin_authenticated', 'true');
-        } catch (e) {}
-        setPasswordError(false);
-      } else {
-        setPasswordError(true);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await api.logout();
-    setIsAuthenticated(false);
-    try {
-      sessionStorage.removeItem('admin_authenticated');
-    } catch (e) {}
-  };
-
+  // Image Upload Handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      setIsUploadingImage(true);
-      const url = await api.uploadImage(file);
-      setNewImage(url);
+      setUploadingImg(true);
+      const url = await uploadImage(file);
+      setArtImageUrl(url);
       showToast('Gambar berhasil di-upload ke server!');
     } catch (err: any) {
-      alert(err.message || 'Gagal meng-upload gambar');
+      showToast(err.message || 'Gagal meng-upload gambar', 'error');
     } finally {
-      setIsUploadingImage(false);
+      setUploadingImg(false);
     }
   };
 
-  const insertTextFormatting = (prefix: string, suffix: string = '') => {
-    setNewContent((prev) => prev + `${prefix} Teks ${suffix}`);
+  // Save Article Handler
+  const handleSaveArticle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!artTitle.trim()) {
+      showToast('Judul artikel wajib diisi', 'error');
+      return;
+    }
+    try {
+      setSaving(true);
+      const articlePayload: Partial<Article> = {
+        id: editingArticleId || undefined,
+        title: artTitle,
+        excerpt: artExcerpt || artTitle,
+        content: artContent || `<p>${artTitle}</p>`,
+        category: artCategory,
+        imageUrl: artImageUrl || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=1200&auto=format&fit=crop',
+        isHeroHeadline: artIsHero,
+        isEditorsPick: artIsChoice,
+        readTime: '3 mnt',
+        author: {
+          name: 'Redaksi Liberta',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
+          role: 'Tim Redaksi'
+        }
+      };
+
+      await saveArticle(articlePayload);
+      showToast(editingArticleId ? 'Artikel berhasil diperbarui!' : 'Artikel baru berhasil diterbitkan!');
+      setIsArticleModalOpen(false);
+      resetArticleForm();
+      await loadAllData();
+      if (onArticlesChange) onArticlesChange();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menyimpan artikel', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const insertYoutubeEmbed = () => {
-    const url = prompt('Masukkan URL Video YouTube (contoh: https://www.youtube.com/watch?v=dQw4w9WgXcQ):');
-    if (!url) return;
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    if (match && match[1]) {
-      const embedCode = `\n<iframe class="w-full aspect-video rounded-xl my-4" src="https://www.youtube.com/embed/${match[1]}" frameborder="0" allowfullscreen></iframe>\n`;
-      setNewContent((prev) => prev + embedCode);
-    } else {
-      alert('URL YouTube tidak valid');
+  // Edit Article Handler
+  const handleOpenEditArticle = (art: Article) => {
+    setEditingArticleId(art.id);
+    setArtTitle(art.title);
+    setArtExcerpt(art.excerpt || '');
+    setArtContent(art.content || '');
+    setArtCategory(art.category);
+    setArtImageUrl(art.imageUrl || '');
+    setArtIsHero(Boolean(art.isHeroHeadline));
+    setArtIsChoice(Boolean(art.isEditorsPick));
+    setIsArticleModalOpen(true);
+  };
+
+  // Delete Article Handler
+  const handleDeleteArticle = async (id: string, title: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus artikel "${title}"?`)) return;
+    try {
+      await deleteArticle(id);
+      showToast('Artikel berhasil dihapus!');
+      await loadAllData();
+      if (onArticlesChange) onArticlesChange();
+    } catch (err: any) {
+      showToast('Gagal menghapus artikel', 'error');
     }
+  };
+
+  // Publish Submission Handler
+  const handlePublishSubmission = async (subId: string) => {
+    try {
+      await publishSubmission(subId);
+      showToast('Naskah warga berhasil diterbitkan ke publikasi utama!');
+      await loadAllData();
+      if (onArticlesChange) onArticlesChange();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menerbitkan naskah', 'error');
+    }
+  };
+
+  // Delete Submission Handler
+  const handleDeleteSubmission = async (subId: string) => {
+    if (!confirm('Hapus naskah ini dari inbox redaksi?')) return;
+    try {
+      await deleteSubmission(subId);
+      showToast('Naskah berhasil dihapus dari inbox');
+      await loadAllData();
+    } catch (err: any) {
+      showToast('Gagal menghapus naskah', 'error');
+    }
+  };
+
+  const resetArticleForm = () => {
+    setEditingArticleId(null);
+    setArtTitle('');
+    setArtExcerpt('');
+    setArtContent('');
+    setArtCategory('Pemerintahan');
+    setArtImageUrl('');
+    setArtIsHero(false);
+    setArtIsChoice(false);
   };
 
   if (!isOpen) return null;
 
-  const safeArticles = Array.isArray(articles) ? articles : [];
-  const filteredArticles = safeArticles.filter(a => {
-    if (!a) return false;
-    const matchCat = filterCategory === 'Semua' || a.category === filterCategory;
-    const matchQ = !searchQuery || 
-      (a.title && a.title.toLowerCase().includes(searchQuery.toLowerCase())) || 
-      (a.summary && a.summary.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchCat && matchQ;
-  });
-
-  const heroArticlesCount = safeArticles.filter(a => a.isHero).length;
-  const totalViewsCount = safeArticles.reduce((acc, curr) => acc + (curr.views || 0), 0);
-
-  const handleToggleHero = async (article: Article) => {
-    try {
-      setLoading(true);
-      await api.updateArticle(article.id, { isHero: !article.isHero });
-      onArticlesChange();
-      showToast(`Status Headline Hero untuk "${article.title.substring(0, 30)}..." diperbarui!`);
-    } catch (err) {
-      showToast('Gagal memperbarui status artikel');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleToggleEditorChoice = async (article: Article) => {
-    try {
-      setLoading(true);
-      await api.updateArticle(article.id, { isEditorChoice: !article.isEditorChoice });
-      onArticlesChange();
-      showToast(`Status Pilihan Redaksi untuk "${article.title.substring(0, 30)}..." diperbarui!`);
-    } catch (err) {
-      showToast('Gagal memperbarui status artikel');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const executeConfirmedDelete = async () => {
-    const { type, id } = confirmDeleteModal;
-    setConfirmDeleteModal({ isOpen: false, type: 'article', id: '', title: '' });
-
-    try {
-      setLoading(true);
-      if (type === 'article') {
-        await api.deleteArticle(id);
-        onArticlesChange();
-        showToast('Artikel berhasil dihapus!');
-      } else if (type === 'page') {
-        await api.deletePage(id);
-        await loadPages();
-        showToast('Halaman statis berhasil dihapus!');
-      } else if (type === 'submission') {
-        await api.deleteSubmission(id);
-        await loadSubmissions();
-        showToast('Naskah warga berhasil dihapus!');
-      }
-    } catch (err) {
-      showToast('Gagal menghapus item');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePublishSubmission = async (sub: CitizenSubmission) => {
-    try {
-      setLoading(true);
-      await api.publishSubmission(sub.id);
-      await loadSubmissions();
-      onArticlesChange();
-      showToast(`Naskah warga "${sub.title.substring(0, 30)}..." berhasil diterbitkan!`);
-    } catch (err) {
-      showToast('Gagal menerbitkan naskah warga');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateArticleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) {
-      alert('Judul dan Isi Berita wajib diisi!');
-      return;
-    }
-    try {
-      setLoading(true);
-      const articlePayload = {
-        title: newTitle,
-        category: newCategory,
-        pillar: newPillar,
-        summary: newSummary || newTitle,
-        content: [newContent],
-        image: newImage || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=1200&auto=format&fit=crop',
-        author: {
-          name: newAuthorName,
-          role: newAuthorRole,
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
-          institution: 'libertamedia.com'
-        },
-        isHero,
-        isEditorChoice,
-        isTrending
-      };
-
-      if (editingArticleId) {
-        await api.updateArticle(editingArticleId, articlePayload);
-        showToast('Artikel berhasil diperbarui!');
-      } else {
-        await api.createArticle(articlePayload);
-        showToast('Artikel baru berhasil diterbitkan!');
-      }
-
-      try { localStorage.removeItem('admin_article_draft'); } catch (e) {}
-      setIsCreatingArticle(false);
-      setEditingArticleId(null);
-      setNewTitle('');
-      setNewSummary('');
-      setNewContent('');
-      setNewImage('');
-      onArticlesChange();
-    } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan artikel');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isAuthenticated) {
+  if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-xl bg-[#E5252A] mx-auto flex items-center justify-center shadow-md text-white font-black text-xl">
-              LM
-            </div>
-            <h3 className="text-xl font-black tracking-tight text-slate-900">WordPress / Blogger Suite CMS</h3>
-            <p className="text-xs text-slate-500">
-              Masukkan password pengelola untuk masuk ke control panel libertamedia.com
-            </p>
-          </div>
-
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Password Admin</label>
-              <input
-                type="password"
-                required
-                autoFocus
-                placeholder="Masukkan password admin..."
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className={`w-full px-4 py-2.5 bg-slate-50 border ${
-                  passwordError ? 'border-red-500 text-red-600' : 'border-slate-300 text-slate-900'
-                } rounded-xl text-sm focus:outline-none focus:border-[#E5252A] transition-colors`}
-              />
-              {passwordError && (
-                <p className="text-xs text-red-500 font-semibold mt-1.5 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Password salah. Silakan coba lagi!
-                </p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-[#E5252A] hover:bg-red-700 text-white font-bold py-3 rounded-xl text-sm shadow-md transition-all flex items-center justify-center gap-2"
-            >
-              Masuk Dashboard CMS &rarr;
-            </button>
-          </form>
-
-          <div className="pt-2 text-center border-t border-slate-100">
-            <button
-              onClick={onClose}
-              className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
-            >
-              Kembali ke Website Utama
-            </button>
-          </div>
+      <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
+        <div className="bg-white p-6 rounded-2xl shadow-xl font-bold text-slate-700 animate-pulse flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-[#E5252A] border-t-transparent rounded-full animate-spin"></div>
+          Memuat Panel Kendali Website...
         </div>
       </div>
     );
   }
 
+  const filteredArticles = articlesList.filter(a => 
+    a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl w-full max-w-7xl h-[94vh] flex flex-col shadow-2xl overflow-hidden text-slate-800">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-center p-0 sm:p-4">
+      <div className="bg-slate-50 w-full max-w-6xl h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         
-        {/* Header Bar */}
-        <div className="bg-white px-6 py-3 border-b border-slate-200 flex items-center justify-between shadow-2xs">
+        {/* TOP BAR */}
+        <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#E5252A] flex items-center justify-center font-black text-white text-sm shadow-xs">
+            <div className="w-9 h-9 bg-[#E5252A] rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm">
               LM
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-black text-slate-900 tracking-tight">
-                  {settings.siteName} • WordPress/Blogger Suite CMS
-                </h2>
-                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
-                  <ShieldCheck className="w-3 h-3" />
-                  Live Sync
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Pusat Kontrol 100% Tampilan Frontend, Iklan, SEO, & Halaman Statis
-              </p>
+              <h2 className="text-lg font-black text-slate-900 leading-tight">Pusat Kendali Admin</h2>
+              <p className="text-xs text-slate-500">Kelola konten, tata letak, & monetisasi libertamedia.com</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                onClose();
-                window.open('/', '_blank');
-              }}
-              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1"
-              title="Lihat Tampilan Depan Website"
+            <button 
+              onClick={onLogout}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-xs font-bold text-slate-600 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <Globe className="w-3.5 h-3.5 text-[#E5252A]" />
-              <span className="hidden sm:inline">Pratinjau Web</span>
+              <LogOut className="w-3.5 h-3.5" /> Keluar
             </button>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-bold transition-all border border-slate-200 flex items-center gap-1"
-              title="Keluar dari Sesi Admin"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Keluar</span>
-            </button>
-            <button
+            <button 
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              Tutup
             </button>
           </div>
         </div>
 
-        {/* Toast Notification */}
-        {toastMessage && (
-          <div className="bg-emerald-600 text-white px-6 py-2 text-xs font-semibold flex items-center justify-between animate-in slide-in-from-top duration-200 shadow-md">
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              {toastMessage}
-            </span>
-            <button onClick={() => setToastMessage(null)} className="opacity-80 hover:opacity-100">
-              <X className="w-4 h-4" />
-            </button>
+        {/* NAVIGATION TABS */}
+        <div className="bg-white border-b border-slate-200 px-6 flex gap-2 overflow-x-auto no-scrollbar">
+          {[
+            { id: 'articles', label: `Manajemen Berita (${articlesList.length})`, icon: FileText },
+            { id: 'layout', label: 'Tata Letak & Identitas', icon: Settings },
+            { id: 'ads', label: 'Iklan & Analitik', icon: DollarSign },
+            { id: 'inbox', label: `Suara Warga (${submissions.length})`, icon: Inbox },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-3.5 px-4 text-xs font-bold border-b-2 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+                  active 
+                    ? 'border-[#E5252A] text-[#E5252A]' 
+                    : 'border-transparent text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TOAST ALERT */}
+        {toast && (
+          <div className={`mx-6 mt-4 p-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+            toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />}
+            {toast.message}
           </div>
         )}
 
-        {/* Main Workspace (Sidebar + Tab Content) */}
-        <div className="flex-1 flex overflow-hidden">
+        {/* CONTENT AREA */}
+        <div className="flex-1 overflow-y-auto p-6">
           
-          {/* 6-Module Navigation Sidebar */}
-          <div className="w-60 bg-white border-r border-slate-200 p-3 flex flex-col justify-between shadow-2xs overflow-y-auto">
-            <div className="space-y-1">
-              
-              <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                Utama & Statistik
-              </div>
-              <button
-                onClick={() => { setActiveTab('overview'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'overview' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                Ringkasan Status
-              </button>
-
-              <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase pt-2">
-                Suiter CMS Frontend
-              </div>
-              
-              <button
-                onClick={() => { setActiveTab('identity'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'identity' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Globe className="w-4 h-4 text-blue-500" />
-                1. Identitas & Branding
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('layout'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'layout' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Sliders className="w-4 h-4 text-purple-500" />
-                2. Layout Seksi Depan
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('navigation'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'navigation' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Palette className="w-4 h-4 text-amber-500" />
-                3. Menu & Kategori
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('ads_analytics'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'ads_analytics' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Megaphone className="w-4 h-4 text-emerald-500" />
-                4. Iklan & Script GA4
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('pages'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'pages' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <BookOpen className="w-4 h-4 text-rose-500" />
-                  5. Halaman Statis
+          {/* TAB 1: ARTICLES */}
+          {activeTab === 'articles' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    placeholder="Cari judul berita atau kategori..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-red-500 font-medium"
+                  />
                 </div>
-                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
-                  {pages.length}
-                </span>
-              </button>
-
-              <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase pt-2">
-                Konten & Redaksi
+                <button
+                  onClick={() => {
+                    resetArticleForm();
+                    setIsArticleModalOpen(true);
+                  }}
+                  className="bg-[#E5252A] hover:bg-red-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Tambah Berita Baru
+                </button>
               </div>
 
-              <button
-                onClick={() => { setActiveTab('articles'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'articles' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <FileText className="w-4 h-4 text-[#E5252A]" />
-                6. Editor Berita ({safeArticles.length})
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('submissions'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'submissions' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Inbox className="w-4 h-4 text-indigo-500" />
-                  Opini Warga
-                </div>
-                {submissions.length > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                    activeTab === 'submissions' ? 'bg-white text-[#E5252A]' : 'bg-red-100 text-[#E5252A]'
-                  }`}>
-                    {submissions.length}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('settings'); setIsCreatingArticle(false); setIsEditingPage(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'settings' ? 'bg-[#E5252A] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Database className="w-4 h-4 text-slate-500" />
-                cPanel MySQL & DB
-              </button>
-
-            </div>
-
-            <button
-              onClick={() => { setActiveTab('articles'); handleOpenCreate(); }}
-              className="w-full mt-4 bg-slate-900 hover:bg-black text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
-            >
-              <Plus className="w-4 h-4 text-emerald-400" />
-              Tulis Artikel Baru
-            </button>
-
-          </div>
-
-          {/* Main Content Viewport */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            
-            {/* OVERVIEW */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="text-xs font-bold uppercase tracking-wider">Total Berita</span>
-                      <FileText className="w-5 h-5 text-[#E5252A]" />
-                    </div>
-                    <div className="text-2xl font-black text-slate-900">{safeArticles.length}</div>
-                    <p className="text-[11px] text-slate-500">Artikel aktif di situs</p>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="text-xs font-bold uppercase tracking-wider">Hero Headline</span>
-                      <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                    </div>
-                    <div className="text-2xl font-black text-slate-900">{heroArticlesCount}</div>
-                    <p className="text-[11px] text-slate-500">Headline Slider Utama</p>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="text-xs font-bold uppercase tracking-wider">Halaman Statis</span>
-                      <BookOpen className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <div className="text-2xl font-black text-slate-900">{pages.length}</div>
-                    <p className="text-[11px] text-slate-500">Pedoman, Redaksi, dll.</p>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="text-xs font-bold uppercase tracking-wider">Total Pembaca</span>
-                      <Eye className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div className="text-2xl font-black text-slate-900">{totalViewsCount.toLocaleString('id-ID')}</div>
-                    <p className="text-[11px] text-slate-500">Akumulasi views berita</p>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      Status Sistem Server & Content Suite Active
-                    </h3>
-                    <span className="text-xs text-slate-400">WordPress/Blogger Suite Engine</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Site Branding</span>
-                      <div className="font-extrabold text-slate-800">{settings.siteName}</div>
-                      <span className="text-slate-500 block truncate">{settings.tagline}</span>
-                    </div>
-
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                      <span className="text-slate-400 font-bold block uppercase text-[10px]">Media Sharp Engine</span>
-                      <div className="font-extrabold text-slate-800">Auto WebP 1200px</div>
-                      <span className="text-slate-500 block">Quality 80 Compression</span>
-                    </div>
-
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
-                      <span className="text-slate-400 font-bold block uppercase text-[10px]">AdSense & Analytics</span>
-                      <div className="font-extrabold text-slate-800">
-                        {settings.analyticsScripts.ga4Id ? 'GA4 Active' : 'Slot Iklan Siap'}
-                      </div>
-                      <span className="text-slate-500 block">GA4, Search Console, Facebook Pixel</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* MODUL 1: IDENTITAS & BRANDING */}
-            {activeTab === 'identity' && (
-              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-blue-600" />
-                    Modul 1: Identitas & Branding Situs
-                  </h3>
-                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
-                    <Save className="w-3.5 h-3.5" />
-                    {loading ? 'Menyimpan...' : 'Simpan Identitas'}
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Nama Portal / Website</label>
-                      <input
-                        type="text"
-                        required
-                        value={settings.siteName}
-                        onChange={e => setSettings({ ...settings, siteName: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Tagline Slogan</label>
-                      <input
-                        type="text"
-                        required
-                        value={settings.tagline}
-                        onChange={e => setSettings({ ...settings, tagline: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Deskripsi Global SEO Website</label>
-                    <textarea
-                      rows={3}
-                      value={settings.description}
-                      onChange={e => setSettings({ ...settings, description: e.target.value })}
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Default OG Image URL (Media Social Preview)</label>
-                    <input
-                      type="text"
-                      value={settings.defaultOgImage}
-                      onChange={e => setSettings({ ...settings, defaultOgImage: e.target.value })}
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Teks Copyright Footer</label>
-                    <input
-                      type="text"
-                      value={settings.copyrightText}
-                      onChange={e => setSettings({ ...settings, copyrightText: e.target.value })}
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
-                    />
-                  </div>
-
-                  <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <span className="font-bold text-slate-900 block">Link Akun Media Sosial Resmi:</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-slate-500 mb-0.5 font-medium">Instagram URL</label>
-                        <input
-                          type="text"
-                          value={settings.socialLinks?.instagram || ''}
-                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, instagram: e.target.value } })}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-500 mb-0.5 font-medium">X (Twitter) URL</label>
-                        <input
-                          type="text"
-                          value={settings.socialLinks?.twitter || ''}
-                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, twitter: e.target.value } })}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-500 mb-0.5 font-medium">YouTube Channel URL</label>
-                        <input
-                          type="text"
-                          value={settings.socialLinks?.youtube || ''}
-                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, youtube: e.target.value } })}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-500 mb-0.5 font-medium">TikTok URL</label>
-                        <input
-                          type="text"
-                          value={settings.socialLinks?.tiktok || ''}
-                          onChange={e => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, tiktok: e.target.value } })}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* MODUL 2: HOMEPAGE LAYOUT MANAGER */}
-            {activeTab === 'layout' && (
-              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-purple-600" />
-                    Modul 2: Homepage Layout & Section Manager
-                  </h3>
-                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
-                    <Save className="w-3.5 h-3.5" />
-                    {loading ? 'Menyimpan...' : 'Simpan Layout'}
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  <span className="font-bold text-slate-900 block">Kontrol Visibilitas Seksi Halaman Depan:</span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {[
-                      { key: 'breakingNews', label: 'Running Text / Ticker Breaking News' },
-                      { key: 'heroSlider', label: 'Hero Headline Slider Utama' },
-                      { key: 'editorsPicks', label: 'Seksi Pilihan Redaksi (Editor Picks)' },
-                      { key: 'citizenVoice', label: 'Seksi Suara Warga / Opini Publik' },
-                      { key: 'multimedia', label: 'Seksi Video & Multimedia' },
-                      { key: 'newsletter', label: 'Form Berlangganan Newsletter' }
-                    ].map(sec => (
-                      <label key={sec.key} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors">
-                        <span className="font-bold text-slate-800">{sec.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((settings.sectionToggles as any)?.[sec.key])}
-                          onChange={e => setSettings({
-                            ...settings,
-                            sectionToggles: { ...settings.sectionToggles, [sec.key]: e.target.checked }
-                          })}
-                          className="w-4 h-4 rounded text-[#E5252A] focus:ring-[#E5252A]"
-                        />
-                      </label>
-                    ))}
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <label className="font-bold text-slate-900 block">Gaya Tampilan Kartu Berita (Card Display Style)</label>
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <input
-                          type="radio"
-                          name="cardDisplayStyle"
-                          value="grid"
-                          checked={settings.cardDisplayStyle === 'grid'}
-                          onChange={() => setSettings({ ...settings, cardDisplayStyle: 'grid' })}
-                          className="text-[#E5252A] focus:ring-[#E5252A]"
-                        />
-                        <span className="font-bold text-slate-800">Grid View (Kotak Card Modern)</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <input
-                          type="radio"
-                          name="cardDisplayStyle"
-                          value="list"
-                          checked={settings.cardDisplayStyle === 'list'}
-                          onChange={() => setSettings({ ...settings, cardDisplayStyle: 'list' })}
-                          className="text-[#E5252A] focus:ring-[#E5252A]"
-                        />
-                        <span className="font-bold text-slate-800">List View (Daftar Baris Ringkas)</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* MODUL 3: MANAJEMEN MENU & KATEGORI */}
-            {activeTab === 'navigation' && (
-              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                    <Palette className="w-4 h-4 text-amber-500" />
-                    Modul 3: Manajemen Menu & Kanal Kategori
-                  </h3>
-                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
-                    <Save className="w-3.5 h-3.5" />
-                    {loading ? 'Menyimpan...' : 'Simpan Kategori'}
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  <p className="text-slate-500">
-                    Atur daftar kanal kategori yang muncul pada <em>Swipeable Navbar Pills</em> di halaman depan:
-                  </p>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Tambah nama kanal kategori baru..."
-                      id="newCatInput"
-                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const val = (e.target as HTMLInputElement).value.trim();
-                          if (val && !settings.customCategories.includes(val)) {
-                            setSettings({ ...settings, customCategories: [...settings.customCategories, val] });
-                            (e.target as HTMLInputElement).value = '';
-                          }
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = document.getElementById('newCatInput') as HTMLInputElement;
-                        if (input && input.value.trim() && !settings.customCategories.includes(input.value.trim())) {
-                          setSettings({ ...settings, customCategories: [...settings.customCategories, input.value.trim()] });
-                          input.value = '';
-                        }
-                      }}
-                      className="bg-slate-900 hover:bg-black text-white font-bold px-4 py-2 rounded-lg"
-                    >
-                      + Tambah Kategori
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {settings.customCategories.map((cat, idx) => (
-                      <div key={cat} className="bg-slate-100 border border-slate-200 text-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2 font-bold">
-                        <span>{cat}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = settings.customCategories.filter((_, i) => i !== idx);
-                            setSettings({ ...settings, customCategories: updated });
-                          }}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* MODUL 4: IKLAN & ANALITIK */}
-            {activeTab === 'ads_analytics' && (
-              <form onSubmit={handleSaveSettingsSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-6 max-w-3xl">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                    <Megaphone className="w-4 h-4 text-emerald-600" />
-                    Modul 4: Manajemen Iklan & Script Analitik
-                  </h3>
-                  <button type="submit" disabled={loading} className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs">
-                    <Save className="w-3.5 h-3.5" />
-                    {loading ? 'Menyimpan...' : 'Simpan Iklan & Script'}
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-xs">
-                  <span className="font-bold text-slate-900 block">Slot Iklan (Monetisasi Banner Code / AdSense):</span>
-                  
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Header Banner Slot (Bisa Kode AdSense / Image HTML)</label>
-                    <textarea
-                      rows={3}
-                      placeholder="<script async src='...'></script> atau <a href='...'><img src='...' /></a>"
-                      value={settings.adSlots?.headerBanner || ''}
-                      onChange={e => setSettings({ ...settings, adSlots: { ...settings.adSlots, headerBanner: e.target.value } })}
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">In-Article Banner Slot (Muncul Setelah Paragraf ke-2)</label>
-                    <textarea
-                      rows={3}
-                      placeholder="Kode iklan di tengah artikel..."
-                      value={settings.adSlots?.inArticleBanner || ''}
-                      onChange={e => setSettings({ ...settings, adSlots: { ...settings.adSlots, inArticleBanner: e.target.value } })}
-                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px]"
-                    />
-                  </div>
-
-                  <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <span className="font-bold text-slate-900 block">Injeksi Script Analitik & Head Tags:</span>
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Google Analytics 4 (GA4 ID / Measurement ID)</label>
-                      <input
-                        type="text"
-                        placeholder="Contoh: G-XXXXXXXXXX"
-                        value={settings.analyticsScripts?.ga4Id || ''}
-                        onChange={e => setSettings({ ...settings, analyticsScripts: { ...settings.analyticsScripts, ga4Id: e.target.value } })}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Google Search Console Verification Tag</label>
-                      <input
-                        type="text"
-                        placeholder='<meta name="google-site-verification" content="..." />'
-                        value={settings.analyticsScripts?.searchConsoleTag || ''}
-                        onChange={e => setSettings({ ...settings, analyticsScripts: { ...settings.analyticsScripts, searchConsoleTag: e.target.value } })}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-[11px]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* MODUL 5: PENGELOLA HALAMAN STATIS */}
-            {activeTab === 'pages' && (
-              <div className="space-y-4">
-                {!isEditingPage ? (
-                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-rose-600" />
-                        Modul 5: Pengelola Halaman Statis CMS ({pages.length})
-                      </h3>
-                      <button
-                        onClick={() => {
-                          setEditingPageId(null);
-                          setPageSlug('');
-                          setPageTitle('');
-                          setPageContent('');
-                          setIsEditingPage(true);
-                        }}
-                        className="bg-slate-900 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                        Buat Halaman Statis Baru
-                      </button>
-                    </div>
-
-                    <div className="divide-y divide-slate-100">
-                      {pages.map(p => (
-                        <div key={p.id} className="py-3 flex items-center justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-xs sm:text-sm text-slate-900">{p.title}</h4>
-                              <code className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">
-                                /p/{p.slug}
-                              </code>
-                            </div>
-                            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{p.content}</p>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => window.open(`/p/${p.slug}`, '_blank')}
-                              className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-600"
-                              title="Buka Halaman"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingPageId(p.id);
-                                setPageSlug(p.slug);
-                                setPageTitle(p.title);
-                                setPageContent(p.content);
-                                setIsEditingPage(true);
-                              }}
-                              className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-bold"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteModal({ isOpen: true, type: 'page', id: p.id, title: p.title })}
-                              className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSavePageSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4 max-w-3xl">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <h3 className="font-extrabold text-sm text-slate-900">
-                        {editingPageId ? 'Edit Halaman Statis' : 'Buat Halaman Statis Baru'}
-                      </h3>
-                      <button type="button" onClick={() => setIsEditingPage(false)} className="text-xs text-slate-400 hover:text-slate-700">
-                        Batal
-                      </button>
-                    </div>
-
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Judul Halaman</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Judul halaman..."
-                          value={pageTitle}
-                          onChange={e => {
-                            setPageTitle(e.target.value);
-                            if (!editingPageId) {
-                              setPageSlug(e.target.value.toLowerCase().replace(/[^\w-]/g, '').replace(/\s+/g, '-'));
-                            }
-                          }}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">URL Slug (contoh: pedoman-media-siber)</label>
-                        <input
-                          type="text"
-                          required
-                          value={pageSlug}
-                          onChange={e => setPageSlug(e.target.value.toLowerCase().replace(/[^\w-]/g, ''))}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-xs"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Isi Konten Halaman (Plain text / HTML)</label>
-                        <textarea
-                          rows={12}
-                          required
-                          value={pageContent}
-                          onChange={e => setPageContent(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs leading-relaxed"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                      <button type="button" onClick={() => setIsEditingPage(false)} className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-600">
-                        Batal
-                      </button>
-                      <button type="submit" disabled={loading} className="px-5 py-2 bg-[#E5252A] hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-2xs">
-                        {loading ? 'Menyimpan...' : 'Simpan Halaman'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            )}
-
-            {/* MODUL 6: EDITOR BERITA TINGKAT LANJUT */}
-            {activeTab === 'articles' && (
-              <div className="space-y-4">
-                {!isCreatingArticle ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-                      <div className="relative w-full sm:w-72">
-                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="Cari judul berita..."
-                          value={searchQuery}
-                          onChange={e => setSearchQuery(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#E5252A]"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-                        {['Semua', 'Pemerintahan', 'Politik', 'Mahasiswa', 'Ekonomi', 'Internasional'].map(cat => (
-                          <button
-                            key={cat}
-                            onClick={() => setFilterCategory(cat)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
-                              filterCategory === cat ? 'bg-[#E5252A] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                            }`}
-                          >
-                            {cat}
-                          </button>
-                        ))}
-                        <button
-                          onClick={handleOpenCreate}
-                          className="bg-slate-900 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs whitespace-nowrap ml-auto"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                          Tambah Artikel
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider">
-                        <span>Daftar Artikel ({filteredArticles.length})</span>
-                        <span>Aksi & Layout</span>
-                      </div>
-
-                      <div className="divide-y divide-slate-100">
-                        {filteredArticles.map(article => (
-                          <div key={article.id} className="p-4 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex items-start gap-3 flex-1 min-w-0">
-                              <img
-                                src={article.image}
-                                alt={article.title}
-                                className="w-14 h-14 rounded-lg object-cover border border-slate-200 flex-shrink-0"
-                              />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                                  <span className="bg-red-50 text-[#E5252A] text-[10px] font-bold px-2 py-0.5 rounded border border-red-100">
-                                    {article.category}
-                                  </span>
-                                  {article.isHero && (
-                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 border border-amber-200">
-                                      <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                                      Hero Slider
-                                    </span>
-                                  )}
-                                  {article.isEditorChoice && (
-                                    <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 border border-blue-200">
-                                      <Sparkles className="w-3 h-3 text-blue-600" />
-                                      Pilihan Redaksi
-                                    </span>
-                                  )}
+              {/* Table of Articles */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                        <th className="py-3 px-4">Artikel Berita</th>
+                        <th className="py-3 px-4">Kategori</th>
+                        <th className="py-3 px-4">Status Highlight</th>
+                        <th className="py-3 px-4 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                      {filteredArticles.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-slate-400 font-medium">
+                            Tidak ada artikel berita yang ditemukan.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredArticles.map((art) => (
+                          <tr key={art.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={art.imageUrl}
+                                  alt=""
+                                  className="w-12 h-10 object-cover rounded-lg flex-shrink-0 bg-slate-100 border border-slate-200"
+                                />
+                                <div>
+                                  <h4 className="font-bold text-slate-900 line-clamp-1">{art.title}</h4>
+                                  <p className="text-[10px] text-slate-400">{art.publishedAt} • Oleh {art.author?.name || 'Redaksi'}</p>
                                 </div>
-                                <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">{article.title}</h4>
-                                <p className="text-[11px] text-slate-500 truncate">{article.summary}</p>
                               </div>
-                            </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2.5 py-1 rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 border border-slate-200">
+                                {art.category}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {art.isHeroHeadline && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-extrabold text-[10px] border border-amber-200">
+                                    Hero Headline
+                                  </span>
+                                )}
+                                {art.isEditorsPick && (
+                                  <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-extrabold text-[10px] border border-blue-200">
+                                    Editor Choice
+                                  </span>
+                                )}
+                                {!art.isHeroHeadline && !art.isEditorsPick && (
+                                  <span className="text-[10px] text-slate-400">Standar</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenEditArticle(art)}
+                                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                                  title="Edit Berita"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteArticle(art.id, art.title)}
+                                  className="p-1.5 rounded-lg border border-red-200 hover:bg-red-50 text-red-600 transition-colors cursor-pointer"
+                                  title="Hapus Berita"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
 
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <button
-                                onClick={() => handleToggleHero(article)}
-                                disabled={loading}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                                  article.isHero ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
-                              >
-                                <Star className={`w-3.5 h-3.5 ${article.isHero ? 'fill-amber-500 text-amber-500' : ''}`} />
-                                Hero
-                              </button>
+          {/* TAB 2: LAYOUT & IDENTITY */}
+          {activeTab === 'layout' && (
+            <div className="max-w-3xl space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-[#E5252A]" /> Identitas Website
+                </h4>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Nama Portal Berita</label>
+                  <input 
+                    type="text" 
+                    value={settings.siteName}
+                    onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Tagline Slogan</label>
+                  <input 
+                    type="text" 
+                    value={settings.siteTagline}
+                    onChange={(e) => setSettings({ ...settings, siteTagline: e.target.value })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Teks Hak Cipta (Footer Text)</label>
+                  <input 
+                    type="text" 
+                    value={settings.footerText}
+                    onChange={(e) => setSettings({ ...settings, footerText: e.target.value })}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                  />
+                </div>
+              </div>
 
-                              <button
-                                onClick={() => handleToggleEditorChoice(article)}
-                                disabled={loading}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                                  article.isEditorChoice ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
-                              >
-                                <Sparkles className="w-3.5 h-3.5" />
-                                Choice
-                              </button>
-
-                              <button
-                                onClick={() => handleOpenEdit(article)}
-                                disabled={loading}
-                                className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg border border-blue-200 transition-all text-xs font-bold flex items-center gap-1"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                                Edit
-                              </button>
-
-                              <button
-                                onClick={() => setConfirmDeleteModal({ isOpen: true, type: 'article', id: article.id, title: article.title })}
-                                disabled={loading}
-                                className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg border border-red-200 transition-all"
-                                title="Hapus Berita"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
+                <h4 className="font-bold text-slate-900 text-sm">Media Sosial Resmi</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">URL Instagram</label>
+                    <input
+                      type="text"
+                      value={settings.socialLinks.instagram}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        socialLinks: { ...settings.socialLinks, instagram: e.target.value }
+                      })}
+                      placeholder="https://instagram.com/..."
+                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    />
                   </div>
-                ) : (
-                  /* Form Rich Editor Berita */
-                  <form onSubmit={handleCreateArticleSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-5 max-w-3xl">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                          <Plus className="w-4 h-4 text-[#E5252A]" />
-                          {editingArticleId ? 'Edit Artikel Berita' : 'Tulis Artikel Berita Baru'}
-                        </h3>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
-                          ⚡ Auto-Save Draft
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsCreatingArticle(false)}
-                        className="text-xs text-slate-400 hover:text-slate-700 font-medium"
-                      >
-                        Batal
-                      </button>
-                    </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">URL Twitter (X)</label>
+                    <input
+                      type="text"
+                      value={settings.socialLinks.twitter}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        socialLinks: { ...settings.socialLinks, twitter: e.target.value }
+                      })}
+                      placeholder="https://x.com/..."
+                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">URL YouTube</label>
+                    <input
+                      type="text"
+                      value={settings.socialLinks.youtube}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        socialLinks: { ...settings.socialLinks, youtube: e.target.value }
+                      })}
+                      placeholder="https://youtube.com/@..."
+                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">URL Facebook</label>
+                    <input
+                      type="text"
+                      value={settings.socialLinks.facebook}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        socialLinks: { ...settings.socialLinks, facebook: e.target.value }
+                      })}
+                      placeholder="https://facebook.com/..."
+                      className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
 
-                    <div className="space-y-4 text-xs">
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Judul Berita Utama</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Masukkan judul berita..."
-                          value={newTitle}
-                          onChange={e => setNewTitle(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
-                        />
-                      </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
+                <h4 className="font-bold text-slate-900 text-sm">Pengatur Tampilan Seksi Halaman Depan (Homepage)</h4>
+                
+                {Object.entries(settings.sections).map(([key, value]) => (
+                  <label key={key} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
+                    <span className="text-xs font-bold text-slate-700 capitalize">
+                      {key.replace('show', 'Tampilkan Seksi ').replace(/([A-Z])/g, ' $1')}
+                    </span>
+                    <input 
+                      type="checkbox" 
+                      checked={Boolean(value)}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        sections: { ...settings.sections, [key]: e.target.checked }
+                      })}
+                      className="w-4 h-4 accent-[#E5252A] cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button 
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center gap-2 shadow-md transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Menyimpan Pengaturan...' : 'Simpan Perubahan Layout'}
+              </button>
+            </div>
+          )}
+
+          {/* TAB 3: ADS & ANALYTICS */}
+          {activeTab === 'ads' && (
+            <div className="max-w-3xl space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-600" /> Kode Iklan Banner & AdSense
+                </h4>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">HTML Banner Atas (Header Ad Slot)</label>
+                  <textarea 
+                    rows={3}
+                    value={settings.monetization.headerBannerHtml}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      monetization: { ...settings.monetization, headerBannerHtml: e.target.value }
+                    })}
+                    placeholder="<a href='...'><img src='...' /></a> atau kode AdSense..."
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">HTML Iklan Tengah Artikel (In-Article Ad)</label>
+                  <textarea 
+                    rows={3}
+                    value={settings.monetization.inArticleAdHtml}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      monetization: { ...settings.monetization, inArticleAdHtml: e.target.value }
+                    })}
+                    placeholder="<div class='ad-unit'>...</div>"
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">ID Google Analytics (GA4 Tag)</label>
+                  <input 
+                    type="text" 
+                    value={settings.monetization.googleAnalyticsId}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      monetization: { ...settings.monetization, googleAnalyticsId: e.target.value }
+                    })}
+                    placeholder="G-XXXXXXXXXX"
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                  />
+                </div>
+              </div>
+
+              <button 
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="bg-[#E5252A] hover:bg-red-700 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center gap-2 shadow-md transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Menyimpan Iklan...' : 'Simpan Konfigurasi Iklan'}
+              </button>
+            </div>
+          )}
+
+          {/* TAB 4: INBOX */}
+          {activeTab === 'inbox' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Naskah Suara Warga Masuk ({submissions.length})</h3>
+              
+              {submissions.length === 0 ? (
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 text-xs font-medium shadow-xs">
+                  Belum ada naskah tulisan opini warga yang masuk di inbox redaksi.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {submissions.map((sub) => (
+                    <div key={sub.id} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3 shadow-xs hover:border-slate-300 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                         <div>
-                          <label className="block font-bold text-slate-700 mb-1">Kategori</label>
-                          <select
-                            value={newCategory}
-                            onChange={e => setNewCategory(e.target.value as CategoryType)}
-                            className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A]"
+                          <span className="px-2 py-0.5 rounded bg-red-100 text-[#E5252A] font-extrabold text-[10px]">
+                            {sub.category}
+                          </span>
+                          <h4 className="font-bold text-slate-900 text-sm mt-1">{sub.title}</h4>
+                          <p className="text-[11px] text-slate-500">
+                            Oleh: <strong>{sub.authorName}</strong> ({sub.authorEmail}) • {sub.submittedAt}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handlePublishSubmission(sub.id)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
                           >
-                            {settings.customCategories.map(cat => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Cover Foto Berita</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="URL foto / Upload..."
-                              value={newImage}
-                              onChange={e => setNewImage(e.target.value)}
-                              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
-                            />
-                            <label className="bg-slate-900 text-white font-bold px-3 py-2 rounded-lg cursor-pointer flex-shrink-0 hover:bg-black transition-all">
-                              {isUploadingImage ? 'Uploading...' : '📁 Select'}
-                              <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                            </label>
-                          </div>
+                            <Sparkles className="w-3.5 h-3.5" /> 1-Klik Terbitkan
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubmission(sub.id)}
+                            className="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                          >
+                            Hapus
+                          </button>
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Ringkasan Eksekutif (Lead)</label>
-                        <textarea
-                          rows={2}
-                          placeholder="Ringkasan singkat 1-2 kalimat..."
-                          value={newSummary}
-                          onChange={e => setNewSummary(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-                          <label className="block font-bold text-slate-700">Isi Naskah Berita (Rich Editor)</label>
-                          <div className="flex gap-1 text-[11px] flex-wrap">
-                            <button type="button" onClick={() => insertTextFormatting('**', '**')} className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded font-bold">B</button>
-                            <button type="button" onClick={() => insertTextFormatting('*', '*')} className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded italic">I</button>
-                            <button type="button" onClick={() => insertTextFormatting('\n## ', '\n')} className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded font-bold text-[#E5252A]">H2</button>
-                            <button type="button" onClick={insertYoutubeEmbed} className="px-2 py-0.5 bg-red-100 text-red-700 hover:bg-red-200 rounded font-bold flex items-center gap-1">
-                              <Youtube className="w-3 h-3" /> YouTube Embed
-                            </button>
-                          </div>
-                        </div>
-                        <textarea
-                          rows={10}
-                          required
-                          placeholder="Tulis naskah berita secara komprehensif..."
-                          value={newContent}
-                          onChange={e => setNewContent(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-[#E5252A] font-sans leading-relaxed"
-                        />
-                      </div>
-
-                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                        <span className="font-bold text-slate-700 block">Tampilkan di Frontend:</span>
-                        <div className="flex items-center gap-6">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isHero}
-                              onChange={e => setIsHero(e.target.checked)}
-                              className="rounded text-[#E5252A] focus:ring-[#E5252A]"
-                            />
-                            Jadikan Hero Slider Utama
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isEditorChoice}
-                              onChange={e => setIsEditorChoice(e.target.checked)}
-                              className="rounded text-blue-600 focus:ring-blue-500"
-                            />
-                            Tampilkan di Pilihan Redaksi
-                          </label>
-                        </div>
-                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed line-clamp-3 bg-slate-50 p-3 rounded-xl border border-slate-100 font-mono">
+                        {sub.content}
+                      </p>
                     </div>
-
-                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => setIsCreatingArticle(false)}
-                        className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="px-5 py-2 bg-[#E5252A] hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-2xs flex items-center gap-1.5"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        {loading ? 'Menyimpan...' : 'Terbitkan Berita'}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            )}
-
-            {/* TAB INBOX SUARA WARGA */}
-            {activeTab === 'submissions' && (
-              <div className="space-y-4">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between">
-                  <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-2 uppercase tracking-wider">
-                    <Inbox className="w-4 h-4 text-blue-600" />
-                    Inbox Naskah Opini Warga ({submissions.length})
-                  </h3>
+                  ))}
                 </div>
-
-                {submissions.length === 0 ? (
-                  <div className="p-8 text-center bg-white rounded-xl border border-slate-200 text-slate-500 text-xs">
-                    Belum ada naskah kiriman warga terbaru.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {submissions.map(sub => (
-                      <div key={sub.id} className="p-5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <span className="bg-red-50 text-[#E5252A] text-[10px] font-bold px-2 py-0.5 rounded border border-red-100">
-                              {sub.category || 'Opini'}
-                            </span>
-                            <h4 className="text-sm font-bold text-slate-900 mt-1">{sub.title}</h4>
-                            <p className="text-xs text-slate-500">
-                              Penulis: <strong>{sub.authorName}</strong> ({sub.institution}) • {sub.email}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handlePublishSubmission(sub)}
-                              disabled={loading}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition-all whitespace-nowrap"
-                            >
-                              <Check className="w-4 h-4" />
-                              Publikasikan 1-Klik
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteModal({ isOpen: true, type: 'submission', id: sub.id, title: sub.title })}
-                              disabled={loading}
-                              className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-200 line-clamp-3">
-                          {sub.content}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB STATUS SYSTEM & DB */}
-            {activeTab === 'settings' && (
-              <div className="space-y-4 max-w-2xl">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-                  <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                    <Database className="w-6 h-6 text-[#E5252A]" />
-                    <div>
-                      <h4 className="text-sm font-extrabold text-slate-900">Status Server & Storage cPanel</h4>
-                      <p className="text-xs text-slate-500">Penyimpanan Lokal JSON & MySQL Connection Pool</p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                    <div>
-                      Server cPanel Aktif! Seluruh data artikel, halaman statis, dan pengaturan website tersimpan secara aman di server cPanel Anda.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>
 
-      {/* Double Confirmation Modal Pop-up */}
-      {confirmDeleteModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-base text-slate-900">Konfirmasi Hapus</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Apakah Anda yakin ingin menghapus <strong>"{confirmDeleteModal.title}"</strong>? Tindakan ini tidak dapat dibatalkan.
-              </p>
-            </div>
-            <div className="flex justify-center gap-3 pt-2">
+      {/* ARTICLE EDIT / CREATE MODAL */}
+      {isArticleModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-900 text-base">
+                {editingArticleId ? 'Edit Artikel Berita' : 'Tambah Artikel Berita Baru'}
+              </h3>
               <button
-                onClick={() => setConfirmDeleteModal({ isOpen: false, type: 'article', id: '', title: '' })}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                onClick={() => setIsArticleModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
               >
-                Batal
-              </button>
-              <button
-                onClick={executeConfirmedDelete}
-                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-xs"
-              >
-                Ya, Hapus Sekarang
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            <form onSubmit={handleSaveArticle} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Judul Artikel *</label>
+                <input
+                  type="text"
+                  required
+                  value={artTitle}
+                  onChange={(e) => setArtTitle(e.target.value)}
+                  placeholder="Masukkan judul berita utama..."
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Kategori Rubrik</label>
+                  <select
+                    value={artCategory}
+                    onChange={(e) => setArtCategory(e.target.value as CategoryType)}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                  >
+                    {[
+                      'Pemerintahan', 'Politik', 'Mahasiswa', 'Sosial Budaya', 'Ekonomi',
+                      'Olahraga & Seni', 'Organisasi & Komunitas', 'Opini', 'Gagasan',
+                      'Cerita Inspiratif', 'Internasional'
+                    ].map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">URL Gambar Headline</label>
+                  <input
+                    type="text"
+                    value={artImageUrl}
+                    onChange={(e) => setArtImageUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Upload Gambar dari Komputer (Sharp WebP Pipeline)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={uploadingImg}
+                  className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-red-50 file:text-[#E5252A] hover:file:bg-red-100 cursor-pointer"
+                />
+                {uploadingImg && <p className="text-[10px] text-amber-600 font-bold mt-1">Meng-upload & meng-optimasi gambar ke WebP...</p>}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Ringkasan Singkat (Excerpt)</label>
+                <textarea
+                  rows={2}
+                  value={artExcerpt}
+                  onChange={(e) => setArtExcerpt(e.target.value)}
+                  placeholder="Ringkasan 1-2 kalimat untuk preview card..."
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Isi Lengkap Naskah Berita (HTML Allowed)</label>
+                <textarea
+                  rows={6}
+                  value={artContent}
+                  onChange={(e) => setArtContent(e.target.value)}
+                  placeholder="<p>Isi artikel berita lengkap...</p>"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-red-500 font-mono"
+                />
+              </div>
+
+              <div className="flex items-center gap-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={artIsHero}
+                    onChange={(e) => setArtIsHero(e.target.checked)}
+                    className="w-4 h-4 accent-[#E5252A]"
+                  />
+                  Tampilkan di Hero Headline Slider
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={artIsChoice}
+                    onChange={(e) => setArtIsChoice(e.target.checked)}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                  Tampilkan di Pilihan Redaksi (Editor Choice)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsArticleModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-[#E5252A] hover:bg-red-700 text-white shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {saving ? 'Menyimpan...' : 'Simpan Artikel'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
+
     </div>
   );
 };
