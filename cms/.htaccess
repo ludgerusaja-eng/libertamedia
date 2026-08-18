@@ -1,0 +1,16 @@
+# Disable Phusion Passenger Node.js for WordPress PHP
+<IfModule mod_passenger.c>
+  PassengerEnabled Off
+</IfModule>
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /cms/
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /cms/index.php [L]
+</IfModule>
+# END WordPress
