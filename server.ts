@@ -3,7 +3,10 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import sanitizeHtml from "sanitize-html";
+import helmet from "helmet";
+import sharp from "sharp";
 import { JsonStorageAdapter } from "./src/storage/JsonStorageAdapter";
+import { MySQLStorageAdapter } from "./src/storage/MySQLStorageAdapter";
 
 const getDirname = (): string => {
   if (typeof __dirname !== "undefined") return __dirname;
@@ -15,8 +18,47 @@ const currentDir = getDirname();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Task 5: HTTP Security Headers using Helmet (Configured safely for SSR & Image loading)
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Allow inline scripts for React SPA hydration & JSON-LD
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  })
+);
+
+// HSTS & Security Headers
+app.use((req, res, next) => {
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// Task 5: Static Asset Caching Policy
+const distPath = path.join(currentDir, "dist");
+if (fs.existsSync(distPath)) {
+  app.use(
+    "/assets",
+    express.static(path.join(distPath, "assets"), {
+      maxAge: "1y",
+      immutable: true
+    })
+  );
+  app.use(
+    "/uploads",
+    express.static(path.join(distPath, "uploads"), {
+      maxAge: "1d",
+      setHeaders: (res) => {
+        res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+      }
+    })
+  );
+}
 
 // Path to persistent data file with resilient directory resolution
 function getDataDir(): string {
@@ -32,7 +74,8 @@ function getDataDir(): string {
 }
 
 const DATA_DIR = getDataDir();
-const storage = new JsonStorageAdapter(DATA_DIR);
+const useMySQL = process.env.DATABASE_TYPE === "mysql" || Boolean(process.env.DB_PASSWORD);
+const storage = useMySQL ? new MySQLStorageAdapter(DATA_DIR) : new JsonStorageAdapter(DATA_DIR);
 
 function readDatabase() {
   return storage.readDatabase();
@@ -652,8 +695,8 @@ app.post("/api/ai/studio-workflow", async (req, res) => {
   }
 });
 
-// 16. POST /api/upload - Base64/Multipart Image Upload to cPanel with security validation
-app.post("/api/upload", requireAdminAuth, (req, res) => {
+// 16. POST /api/upload - Base64 Image Upload with Sharp Automated WebP Optimization Pipeline
+app.post("/api/upload", requireAdminAuth, async (req, res) => {
   try {
     const { imageBase64 } = req.body;
     if (!imageBase64 || typeof imageBase64 !== "string") {
@@ -673,24 +716,35 @@ app.post("/api/upload", requireAdminAuth, (req, res) => {
       return res.status(400).json({ success: false, message: "Format gambar tidak didukung. Hanya JPG, JPEG, PNG, WEBP, GIF." });
     }
 
-    const ext = rawExt.includes("png") ? "png" : rawExt.includes("webp") ? "webp" : rawExt.includes("gif") ? "gif" : "jpg";
     const base64Data = matches ? matches[2] : imageBase64;
-    
+    const inputBuffer = Buffer.from(base64Data, "base64");
+
     const distPath = getDistPath();
     const uploadsDir = path.join(distPath, "uploads");
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const safeName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const safeName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.webp`;
     const filePath = path.join(uploadsDir, safeName);
 
-    fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+    // Automated Sharp Pipeline: Resize max width 1200px, convert to WebP, quality 80
+    await sharp(inputBuffer)
+      .resize({ width: 1200, withoutEnlargement: true, fit: "inside" })
+      .webp({ quality: 80 })
+      .toFile(filePath);
+
     const imageUrl = `/uploads/${safeName}`;
 
-    res.json({ success: true, url: imageUrl, message: "Gambar berhasil di-upload secara aman" });
+    res.json({
+      success: true,
+      url: imageUrl,
+      format: "webp",
+      message: "Gambar berhasil di-optimasi otomatis ke WebP (max 1200px, quality 80) dan di-upload secara aman"
+    });
   } catch (err: any) {
     console.error("Upload error:", err);
+    res.status(500).json({ success: false, message: err.message || "Gagal meng-upload dan meng-optimasi gambar" });
   }
 });
 
@@ -742,7 +796,7 @@ app.get("/rss.xml", (req, res) => {
   res.send(xml);
 });
 
-// 18. GET /berita/:id - Open Graph Dynamic Social Media Preview with 5-Minute Cache
+// 18. GET /berita/:id - Open Graph Dynamic Social Media Preview & Schema.org JSON-LD with 5-Minute Cache
 app.get("/berita/:id", (req, res) => {
   const articleIdOrSlug = req.params.id;
   const now = Date.now();
@@ -769,8 +823,35 @@ app.get("/berita/:id", (req, res) => {
     const ogImage = article.image.startsWith("http") ? article.image : `${domain}${article.image}`;
     const ogUrl = `${domain}/berita/${article.slug || article.id}`;
 
+    const newsArticleSchema = {
+      "@context": "https://schema.org",
+      "@type": "NewsArticle",
+      "headline": article.title,
+      "description": article.summary,
+      "image": [ogImage],
+      "datePublished": "2026-08-17T08:00:00+07:00",
+      "dateModified": new Date().toISOString(),
+      "author": [{
+        "@type": "Person",
+        "name": article.author?.name || "Redaksi Liberta",
+        "jobTitle": article.author?.role || "Tim Redaksi",
+        "url": `${domain}/redaksi`
+      }],
+      "publisher": {
+        "@type": "NewsMediaOrganization",
+        "name": "libertamedia",
+        "url": domain,
+        "logo": {
+          "@type": "ImageObject",
+          "url": `${domain}/uploads/logo.png`
+        }
+      },
+      "articleSection": article.category || "Berita",
+      "keywords": Array.isArray(article.tags) ? article.tags.join(", ") : article.category
+    };
+
     const ogTags = `
-    <!-- Dynamic Open Graph SSR Injection -->
+    <!-- Dynamic Open Graph SSR & Schema.org JSON-LD Injection -->
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${ogUrl}" />
     <meta property="og:title" content="${ogTitle}" />
@@ -781,12 +862,74 @@ app.get("/berita/:id", (req, res) => {
     <meta name="twitter:title" content="${ogTitle}" />
     <meta name="twitter:description" content="${ogDesc}" />
     <meta name="twitter:image" content="${ogImage}" />
+    <script type="application/ld+json">
+    ${JSON.stringify(newsArticleSchema, null, 2)}
+    </script>
     `;
     html = html.replace("</head>", `${ogTags}</head>`);
   }
 
   OG_CACHE.set(articleIdOrSlug, { html, timestamp: now });
   res.send(html);
+});
+
+// Task 4: Dynamic Sitemap.xml Generator with 15-Minute Cache
+let SITEMAP_CACHE: { xml: string; timestamp: number } | null = null;
+
+app.get("/sitemap.xml", (req, res) => {
+  const now = Date.now();
+  if (SITEMAP_CACHE && now - SITEMAP_CACHE.timestamp < 15 * 60 * 1000) {
+    res.header("Content-Type", "application/xml; charset=utf-8");
+    return res.send(SITEMAP_CACHE.xml);
+  }
+
+  const db = readDatabase();
+  const articles = (db.articles || []).filter((a) => (a.status || "PUBLISHED") === "PUBLISHED");
+  const domain = process.env.APP_URL || "https://libertamedia.com";
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${domain}</loc>
+    <changefreq>always</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${domain}/?admin=true</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.1</priority>
+  </url>
+`;
+
+  articles.forEach((art) => {
+    const artUrl = `${domain}/berita/${art.slug || art.id}`;
+    xml += `  <url>
+    <loc>${artUrl}</loc>
+    <lastmod>${new Date().toISOString()}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>\n`;
+  });
+
+  xml += `</urlset>`;
+  SITEMAP_CACHE = { xml, timestamp: now };
+
+  res.header("Content-Type", "application/xml; charset=utf-8");
+  res.send(xml);
+});
+
+// Task 4: Dynamic Robots.txt Endpoint
+app.get("/robots.txt", (req, res) => {
+  const domain = process.env.APP_URL || "https://libertamedia.com";
+  const content = `User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: ${domain}/sitemap.xml
+`;
+  res.header("Content-Type", "text/plain");
+  res.send(content);
 });
 
 /* -------------------------------------------------------------

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { TopBar } from './components/TopBar';
 import { Header } from './components/Header';
 import { Navbar } from './components/Navbar';
@@ -6,21 +6,23 @@ import { HeroSection } from './components/HeroSection';
 import { CeritaSection } from './components/CeritaSection';
 import { InternasionalSection } from './components/InternasionalSection';
 import { TrendingSidebar } from './components/TrendingSidebar';
-import { VideoSection } from './components/VideoSection';
-import { ArticleModal } from './components/ArticleModal';
-import { SubmitStoryModal } from './components/SubmitStoryModal';
-import { SearchModal } from './components/SearchModal';
-import { BookmarkDrawer } from './components/BookmarkDrawer';
-import { VideoModal } from './components/VideoModal';
-import { SocialPlatformModal, NewsletterModal } from './components/SocialPlatformModal';
-import { EditorialModal } from './components/EditorialModal';
-import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { INITIAL_ARTICLES, MOCK_VIDEOS, INITIAL_POLL } from './data/mockArticles';
 import { Article, CategoryType, VideoItem, CitizenSubmission } from './types';
 import { api } from './services/api';
-import { CheckCircle2, Flame, Filter, ChevronRight, PenSquare, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Flame, Filter, ChevronRight } from 'lucide-react';
+
+// Code-Splitting: Lazy-load heavy modals & Admin Dashboard to keep initial chunk < 500KB
+const ArticleModal = lazy(() => import('./components/ArticleModal').then(m => ({ default: m.ArticleModal })));
+const SubmitStoryModal = lazy(() => import('./components/SubmitStoryModal').then(m => ({ default: m.SubmitStoryModal })));
+const SearchModal = lazy(() => import('./components/SearchModal').then(m => ({ default: m.SearchModal })));
+const BookmarkDrawer = lazy(() => import('./components/BookmarkDrawer').then(m => ({ default: m.BookmarkDrawer })));
+const VideoModal = lazy(() => import('./components/VideoModal').then(m => ({ default: m.VideoModal })));
+const EditorialModal = lazy(() => import('./components/EditorialModal').then(m => ({ default: m.EditorialModal })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const SocialPlatformModal = lazy(() => import('./components/SocialPlatformModal').then(m => ({ default: m.SocialPlatformModal })));
+const NewsletterModal = lazy(() => import('./components/SocialPlatformModal').then(m => ({ default: m.NewsletterModal })));
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>(INITIAL_ARTICLES);
@@ -245,15 +247,17 @@ export default function App() {
         </div>
 
         <div className="flex-1 p-2 md:p-6 flex items-center justify-center">
-          <AdminDashboard
-            isOpen={true}
-            onClose={() => {
-              setIsAdminOpen(false);
-              window.location.href = '/';
-            }}
-            articles={articles}
-            onArticlesChange={fetchLiveArticles}
-          />
+          <Suspense fallback={<div className="text-xs text-slate-400 font-bold p-8">Memuat Admin Portal...</div>}>
+            <AdminDashboard
+              isOpen={true}
+              onClose={() => {
+                setIsAdminOpen(false);
+                window.location.href = '/';
+              }}
+              articles={articles}
+              onArticlesChange={fetchLiveArticles}
+            />
+          </Suspense>
         </div>
       </div>
     );
@@ -457,73 +461,76 @@ export default function App() {
         onClose={() => setAudioArticle(null)}
       />
 
-      {/* Full Article Modal / Reader View */}
-      <ArticleModal
-        article={selectedArticle}
-        onClose={() => setSelectedArticle(null)}
-        onSelectArticle={(art) => setSelectedArticle(art)}
-        allArticles={articles}
-        savedArticleIds={savedArticleIds}
-        onToggleSave={handleToggleSave}
-        fontSize={fontSize}
-      />
+      {/* Suspense Wrapper for Lazy Modals */}
+      <Suspense fallback={null}>
+        {/* Full Article Modal / Reader View */}
+        <ArticleModal
+          article={selectedArticle}
+          onClose={() => setSelectedArticle(null)}
+          onSelectArticle={(art) => setSelectedArticle(art)}
+          allArticles={articles}
+          savedArticleIds={savedArticleIds}
+          onToggleSave={handleToggleSave}
+          fontSize={fontSize}
+        />
 
-      {/* Editorial & CMS Modal */}
-      <EditorialModal
-        isOpen={isEditorialOpen}
-        onClose={() => setIsEditorialOpen(false)}
-        onArticleCreated={handleArticleCreated}
-        onArticleDeleted={handleArticleDeleted}
-        publishedArticles={articles}
-        onOpenArticle={(art) => setSelectedArticle(art)}
-        onRefreshArticles={fetchLiveArticles}
-      />
+        {/* Editorial & CMS Modal */}
+        <EditorialModal
+          isOpen={isEditorialOpen}
+          onClose={() => setIsEditorialOpen(false)}
+          onArticleCreated={handleArticleCreated}
+          onArticleDeleted={handleArticleDeleted}
+          publishedArticles={articles}
+          onOpenArticle={(art) => setSelectedArticle(art)}
+          onRefreshArticles={fetchLiveArticles}
+        />
 
-      {/* Submit Story Modal */}
-      <SubmitStoryModal
-        isOpen={isSubmitStoryOpen}
-        onClose={() => setIsSubmitStoryOpen(false)}
-        onSubmit={handleCitizenSubmit}
-      />
+        {/* Submit Story Modal */}
+        <SubmitStoryModal
+          isOpen={isSubmitStoryOpen}
+          onClose={() => setIsSubmitStoryOpen(false)}
+          onSubmit={handleCitizenSubmit}
+        />
 
-      {/* Search Modal */}
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        articles={articles}
-        onSelectArticle={(art) => setSelectedArticle(art)}
-      />
+        {/* Search Modal */}
+        <SearchModal
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+          articles={articles}
+          onSelectArticle={(art) => setSelectedArticle(art)}
+        />
 
-      {/* Bookmark Drawer */}
-      <BookmarkDrawer
-        isOpen={isBookmarksOpen}
-        onClose={() => setIsBookmarksOpen(false)}
-        savedArticleIds={savedArticleIds}
-        allArticles={articles}
-        onSelectArticle={(art) => setSelectedArticle(art)}
-        onRemoveBookmark={handleRemoveBookmark}
-        onClearAllBookmarks={handleClearAllBookmarks}
-      />
+        {/* Bookmark Drawer */}
+        <BookmarkDrawer
+          isOpen={isBookmarksOpen}
+          onClose={() => setIsBookmarksOpen(false)}
+          savedArticleIds={savedArticleIds}
+          allArticles={articles}
+          onSelectArticle={(art) => setSelectedArticle(art)}
+          onRemoveBookmark={handleRemoveBookmark}
+          onClearAllBookmarks={handleClearAllBookmarks}
+        />
 
-      {/* Video Modal */}
-      <VideoModal
-        video={selectedVideo}
-        onClose={() => setSelectedVideo(null)}
-        allVideos={videos}
-        onSelectOtherVideo={(v) => setSelectedVideo(v)}
-      />
+        {/* Video Modal */}
+        <VideoModal
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+          allVideos={videos}
+          onSelectOtherVideo={(v) => setSelectedVideo(v)}
+        />
 
-      {/* Social Platform Modal */}
-      <SocialPlatformModal
-        platform={selectedSocialPlatform}
-        onClose={() => setSelectedSocialPlatform(null)}
-      />
+        {/* Social Platform Modal */}
+        <SocialPlatformModal
+          platform={selectedSocialPlatform}
+          onClose={() => setSelectedSocialPlatform(null)}
+        />
 
-      {/* Newsletter Modal */}
-      <NewsletterModal
-        isOpen={isNewsletterOpen}
-        onClose={() => setIsNewsletterOpen(false)}
-      />
+        {/* Newsletter Modal */}
+        <NewsletterModal
+          isOpen={isNewsletterOpen}
+          onClose={() => setIsNewsletterOpen(false)}
+        />
+      </Suspense>
 
     </div>
   );
