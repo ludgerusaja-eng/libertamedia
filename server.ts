@@ -1011,7 +1011,8 @@ app.get("/rss.xml", (req, res) => {
 });
 
 // 18. GET /berita/:id - Open Graph Dynamic Social Media Preview & Schema.org JSON-LD with 5-Minute Cache
-app.get("/berita/:id", (req, res) => {
+// 18. GET /berita/:id - Open Graph Dynamic Social Media Preview & Schema.org JSON-LD with 5-Minute Cache (WordPress Headless SSR Integration)
+app.get("/berita/:id", async (req, res) => {
   const articleIdOrSlug = req.params.id;
   const now = Date.now();
 
@@ -1020,8 +1021,6 @@ app.get("/berita/:id", (req, res) => {
     return res.send(cached.html);
   }
 
-  const db = readDatabase();
-  const article = db.articles.find((a) => a.id === articleIdOrSlug || a.slug === articleIdOrSlug);
   const distPath = getDistPath();
   const indexPath = path.join(distPath, "index.html");
 
@@ -1029,26 +1028,89 @@ app.get("/berita/:id", (req, res) => {
     return res.status(404).send("index.html not found.");
   }
 
+  let articleMeta: {
+    title: string;
+    summary: string;
+    image: string;
+    slugOrId: string;
+    authorName: string;
+    category: string;
+    publishedDate: string;
+  } | null = null;
+
+  // 1. Attempt to fetch from Headless WordPress REST API
+  const wpBaseUrl = process.env.WP_BASE_URL || 'https://admin.libertamedia.com';
+  try {
+    let wpPost: any = null;
+    const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?slug=${encodeURIComponent(articleIdOrSlug)}&_embed`);
+    if (wpRes.ok) {
+      const posts = await wpRes.json();
+      if (Array.isArray(posts) && posts.length > 0) wpPost = posts[0];
+    }
+    if (!wpPost && !isNaN(Number(articleIdOrSlug))) {
+      const wpResId = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts/${articleIdOrSlug}?_embed`);
+      if (wpResId.ok) wpPost = await wpResId.json();
+    }
+
+    if (wpPost) {
+      const featuredImage = 
+        wpPost._embedded?.['wp:featuredmedia']?.[0]?.source_url || 
+        wpPost.featured_media_url ||
+        'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
+      const categoryName = wpPost._embedded?.['wp:term']?.[0]?.[0]?.name || 'Pemerintahan';
+      const authorName = wpPost._embedded?.author?.[0]?.name || 'Redaksi Liberta';
+
+      articleMeta = {
+        title: wpPost.title?.rendered || 'Berita libertamedia',
+        summary: wpPost.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || 'Portal berita nasional & opini publik independen.',
+        image: featuredImage,
+        slugOrId: wpPost.slug || wpPost.id.toString(),
+        authorName,
+        category: categoryName,
+        publishedDate: wpPost.date || new Date().toISOString()
+      };
+    }
+  } catch (err) {
+    console.warn('WP REST API SSR fetch warning:', err);
+  }
+
+  // 2. Fallback to local database if WP API is unreachable
+  if (!articleMeta) {
+    const db = readDatabase();
+    const article = db.articles.find((a) => a.id === articleIdOrSlug || a.slug === articleIdOrSlug);
+    if (article) {
+      articleMeta = {
+        title: article.title,
+        summary: article.summary || article.excerpt || "Portal berita nasional & opini publik independen.",
+        image: article.image || article.imageUrl || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200",
+        slugOrId: article.slug || article.id,
+        authorName: article.author?.name || "Redaksi Liberta",
+        category: article.category || "Berita",
+        publishedDate: article.publishedAt || new Date().toISOString()
+      };
+    }
+  }
+
   let html = fs.readFileSync(indexPath, "utf-8");
-  if (article) {
+  if (articleMeta) {
     const domain = process.env.APP_URL || "https://libertamedia.com";
-    const ogTitle = sanitizeText(`${article.title} | libertamedia.com`);
-    const ogDesc = sanitizeText(article.summary || "Portal berita nasional & opini publik independen.");
-    const ogImage = article.image.startsWith("http") ? article.image : `${domain}${article.image}`;
-    const ogUrl = `${domain}/berita/${article.slug || article.id}`;
+    const ogTitle = sanitizeText(`${articleMeta.title} | libertamedia.com`);
+    const ogDesc = sanitizeText(articleMeta.summary);
+    const ogImage = articleMeta.image.startsWith("http") ? articleMeta.image : `${domain}${articleMeta.image}`;
+    const ogUrl = `${domain}/berita/${articleMeta.slugOrId}`;
 
     const newsArticleSchema = {
       "@context": "https://schema.org",
       "@type": "NewsArticle",
-      "headline": article.title,
-      "description": article.summary,
+      "headline": articleMeta.title,
+      "description": articleMeta.summary,
       "image": [ogImage],
-      "datePublished": "2026-08-17T08:00:00+07:00",
+      "datePublished": articleMeta.publishedDate,
       "dateModified": new Date().toISOString(),
       "author": [{
         "@type": "Person",
-        "name": article.author?.name || "Redaksi Liberta",
-        "jobTitle": article.author?.role || "Tim Redaksi",
+        "name": articleMeta.authorName,
+        "jobTitle": "Tim Redaksi",
         "url": `${domain}/redaksi`
       }],
       "publisher": {
@@ -1060,12 +1122,11 @@ app.get("/berita/:id", (req, res) => {
           "url": `${domain}/uploads/logo.png`
         }
       },
-      "articleSection": article.category || "Berita",
-      "keywords": Array.isArray(article.tags) ? article.tags.join(", ") : article.category
+      "articleSection": articleMeta.category
     };
 
     const ogTags = `
-    <!-- Dynamic Open Graph SSR & Schema.org JSON-LD Injection -->
+    <!-- Dynamic Open Graph SSR & Schema.org JSON-LD Injection (Headless WP) -->
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${ogUrl}" />
     <meta property="og:title" content="${ogTitle}" />

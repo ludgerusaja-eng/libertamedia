@@ -405,8 +405,86 @@ export const api = {
   },
 };
 
-export const fetchArticles = (params?: any) => api.getArticles(params);
-export const fetchArticleById = (id: string) => api.getArticleById(id);
+const WP_API_URL = (typeof process !== 'undefined' && process.env?.VITE_WP_API_URL) || 'https://admin.libertamedia.com/wp-json/wp/v2';
+
+// Helper Transformer: Format data WordPress ke Interface Article Frontend Liberta
+export const transformWpPost = (post: any): Article => {
+  const featuredImage = 
+    post._embedded?.['wp:featuredmedia']?.[0]?.source_url || 
+    post.featured_media_url ||
+    'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
+
+  const categoryName = (post._embedded?.['wp:term']?.[0]?.[0]?.name || 'Pemerintahan') as CategoryType;
+
+  const rawHtml = post.content?.rendered || post.content || '';
+  const words = rawHtml.replace(/<[^>]+>/g, '').split(/\s+/).filter(Boolean).length;
+  const readTime = `${Math.max(1, Math.ceil(words / 180))} min baca`;
+
+  const authorName = post._embedded?.author?.[0]?.name || post.author_name || 'Redaksi Liberta';
+  const authorAvatar = post._embedded?.author?.[0]?.avatar_urls?.['96'] || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';
+
+  return {
+    id: post.id.toString(),
+    title: post.title?.rendered || post.title || 'Tanpa Judul',
+    slug: post.slug || post.id.toString(),
+    excerpt: post.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || post.title?.rendered || '',
+    category: categoryName,
+    publishedAt: post.date ? new Date(post.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terbaru',
+    author: {
+      name: authorName,
+      avatar: authorAvatar,
+      role: 'Tim Redaksi'
+    },
+    imageUrl: featuredImage,
+    content: rawHtml,
+    readTime: readTime,
+    isHeroHeadline: Boolean(post.sticky),
+    isEditorsPick: Boolean(post.meta?._is_editorial_choice || post.sticky),
+    views: post.meta?._views_count || Math.floor(Math.random() * 500) + 100
+  };
+};
+
+export const fetchArticles = async (page = 1, perPage = 20): Promise<Article[]> => {
+  try {
+    const res = await fetch(`${WP_API_URL}/posts?_embed&page=${page}&per_page=${perPage}&status=publish`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map(transformWpPost);
+      }
+    }
+  } catch (error) {
+    console.warn('Gagal mengambil data dari WordPress REST API, mencoba fallback:', error);
+  }
+  return api.getArticles();
+};
+
+export const fetchArticleById = async (id: string): Promise<Article | null> => {
+  try {
+    const res = await fetch(`${WP_API_URL}/posts/${id}?_embed`);
+    if (res.ok) {
+      const data = await res.json();
+      return transformWpPost(data);
+    }
+  } catch (error) {
+    console.warn('Gagal mengambil detail dari WordPress REST API:', error);
+  }
+  return api.getArticleById(id);
+};
+
+export const fetchArticlesByCategory = async (categoryId: number): Promise<Article[]> => {
+  try {
+    const res = await fetch(`${WP_API_URL}/posts?_embed&categories=${categoryId}&status=publish`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.map(transformWpPost);
+    }
+  } catch (error) {
+    console.warn('Gagal mengambil artikel berdasarkan kategori WP:', error);
+  }
+  return [];
+};
+
 export const createArticle = (data: any) => api.createArticle(data);
 export const updateArticle = (id: string, data: any) => api.updateArticle(id, data);
 export const deleteArticle = (id: string) => api.deleteArticle(id);
