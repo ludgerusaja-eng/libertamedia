@@ -7,3 +7,5 @@ deployment:
     - /bin/cp -f dist/index.html $PUBLICPATH/index.html
     - /bin/mkdir -p $PUBLICPATH/assets
     - /bin/cp -Rf dist/assets/* $PUBLICPATH/assets/
+    - /bin/mkdir -p $DEPLOYPATH/tmp
+    - /bin/touch $DEPLOYPATH/tmp/restart.txt
