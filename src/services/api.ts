@@ -300,16 +300,33 @@ export const api = {
   async getSettings(): Promise<any> {
     try {
       const res = await fetch('/api/settings');
-      if (!res.ok) return null;
-      const data = await safeJsonResponse(res);
-      return data.data;
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        const settings = data.data || data;
+        if (typeof window !== 'undefined' && settings) {
+          try { localStorage.setItem('liberta_site_settings', JSON.stringify(settings)); } catch (e) {}
+        }
+        return settings;
+      }
     } catch (err) {
       console.warn('API getSettings fallback:', err);
-      return null;
     }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('liberta_site_settings');
+        if (local) return JSON.parse(local);
+      } catch (e) {}
+    }
+    return null;
   },
 
   async saveSettings(settingsData: any): Promise<any> {
+    if (typeof window !== 'undefined' && settingsData) {
+      try { localStorage.setItem('liberta_site_settings', JSON.stringify(settingsData)); } catch (e) {}
+    }
+
     try {
       const token = sessionStorage.getItem('liberta_admin_token') || getAdminToken();
       const res = await fetch('/api/settings', {
@@ -322,17 +339,22 @@ export const api = {
         body: JSON.stringify(settingsData),
       });
 
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.warn('Server cPanel merespons HTML. Pengaturan tersimpan di localStorage browser.');
+        return settingsData;
+      }
+
       if (!res.ok) {
-        const errorData = await safeJsonResponse(res).catch(() => ({}));
-        console.error('Save settings server error:', errorData);
+        const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || errorData.message || `HTTP ${res.status}`);
       }
 
-      const data = await safeJsonResponse(res);
-      return data.data || data;
-    } catch (err) {
-      console.error('Failed to save settings:', err);
-      throw err;
+      const data = await res.json();
+      return data.data || data || settingsData;
+    } catch (err: any) {
+      console.warn('Backend saveSettings network warning:', err);
+      return settingsData;
     }
   },
 

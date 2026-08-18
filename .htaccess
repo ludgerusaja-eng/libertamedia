@@ -1,3 +1,10 @@
+# DO NOT REMOVE OR MODIFY - CPANEL PHUSION PASSENGER CONFIGURATION
+<IfModule mod_passenger.c>
+  PassengerEnabled On
+  PassengerAppType node
+  PassengerStartupFile app.js
+</IfModule>
+
 # Apache Rewrite Rules for libertamedia.com (cPanel Node.js / Phusion Passenger Routing)
 <IfModule mod_rewrite.c>
   RewriteEngine On
@@ -9,15 +16,19 @@
   RewriteRule ^ - [L]
 
   # 2. Pass all API requests (/api/*) directly to Node.js backend (app.js)
-  RewriteRule ^api(/.*)?$ app.js [QSA,L]
+  RewriteRule ^api/(.*)$ app.js [QSA,L]
+  RewriteRule ^api$ app.js [QSA,L]
 
   # 3. Pass all SSR dynamic routes (/berita/*, /p/*, /rss.xml, /sitemap.xml, /robots.txt) to Node.js backend
-  RewriteRule ^berita(/.*)?$ app.js [QSA,L]
-  RewriteRule ^p(/.*)?$ app.js [QSA,L]
+  RewriteRule ^berita/(.*)$ app.js [QSA,L]
+  RewriteRule ^p/(.*)$ app.js [QSA,L]
   RewriteRule ^rss\.xml$ app.js [QSA,L]
   RewriteRule ^sitemap\.xml$ app.js [QSA,L]
   RewriteRule ^robots\.txt$ app.js [QSA,L]
 
   # 4. Fallback all remaining frontend SPA subroutes to index.html for hydration
-  RewriteRule . index.html [L]
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
 </IfModule>
