@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, 
+  ArrowLeft,
   Clock, 
   Eye, 
   Bookmark, 
@@ -226,12 +227,12 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 p-0 sm:p-4 md:p-6 bg-white sm:bg-slate-950/80 backdrop-blur-sm flex justify-center animate-in fade-in duration-200">
       
-      {/* Modal Container */}
+      {/* Modal Container — Full Screen 100vw/100vh on Mobile, Rounded Card on Desktop */}
       <div 
         onScroll={handleScroll}
-        className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col relative overflow-y-auto"
+        className="bg-white text-slate-900 rounded-none sm:rounded-2xl w-full max-w-4xl shadow-2xl border-0 sm:border border-slate-200 h-full sm:h-auto sm:max-h-[92vh] flex flex-col relative overflow-y-auto overscroll-contain"
       >
         {/* Top Reading Progress Bar */}
         <div className="sticky top-0 left-0 right-0 h-1 bg-slate-100 z-30">
@@ -242,9 +243,19 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
         </div>
 
         {/* Modal Sticky Header Bar */}
-        <div className="sticky top-1 bg-white/95 backdrop-blur-md px-4 sm:px-6 py-3 border-b border-slate-200 flex items-center justify-between z-20">
+        <div className="sticky top-1 bg-white/95 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-200 flex items-center justify-between z-20">
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Thumb-friendly Mobile Back Arrow / Desktop Close Icon */}
+            <button 
+              onClick={onClose}
+              className="p-1.5 -ml-1 mr-1 rounded-lg text-slate-600 hover:text-slate-950 hover:bg-slate-100 transition-colors flex items-center justify-center min-h-[40px] min-w-[40px] active:scale-95"
+              aria-label="Tutup Artikel"
+            >
+              <ArrowLeft className="w-5 h-5 sm:hidden text-slate-800" />
+              <X className="w-5 h-5 hidden sm:inline" />
+            </button>
+
             <span className="bg-[#E5252A] text-white text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-sm">
               {article.category}
             </span>

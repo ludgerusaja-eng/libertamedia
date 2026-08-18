@@ -283,27 +283,28 @@ export default function App() {
         onOpenAdmin={() => setIsAdminOpen(true)}
       />
 
-      {/* 2. Main Header */}
-      <Header
-        onOpenSearch={() => setIsSearchOpen(true)}
-        onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
-        onOpenBookmarks={() => setIsBookmarksOpen(true)}
-        bookmarkCount={savedArticleIds.length}
-        onOpenNewsletter={() => setIsNewsletterOpen(true)}
-        onResetView={handleResetView}
-        onOpenAdmin={() => setIsAdminOpen(true)}
-      />
+      {/* 2 & 3. Solid Combined Sticky Wrapper for Header & Navbar (Prevents Mobile Scroll Gap) */}
+      <div className="sticky top-0 z-40 bg-white shadow-sm">
+        <Header
+          onOpenSearch={() => setIsSearchOpen(true)}
+          onOpenSubmitStory={() => setIsSubmitStoryOpen(true)}
+          onOpenBookmarks={() => setIsBookmarksOpen(true)}
+          bookmarkCount={savedArticleIds.length}
+          onOpenNewsletter={() => setIsNewsletterOpen(true)}
+          onResetView={handleResetView}
+          onOpenAdmin={() => setIsAdminOpen(true)}
+        />
 
-      {/* 3. Main Navigation */}
-      <Navbar
-        selectedCategory={selectedCategory}
-        onSelectCategory={(cat) => {
-          setSelectedCategory(cat);
-          setActiveTag(null);
-        }}
-        onScrollToSection={handleScrollToSection}
-        onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
-      />
+        <Navbar
+          selectedCategory={selectedCategory}
+          onSelectCategory={(cat) => {
+            setSelectedCategory(cat);
+            setSelectedArticle(null);
+          }}
+          onScrollToSection={handleScrollToSection}
+          onOpenSocialModal={(platform) => setSelectedSocialPlatform(platform)}
+        />
+      </div>
 
       {/* Main Content Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-10">
