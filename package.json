@@ -14,6 +14,7 @@
     "check:api": "tsx scripts/api_contract_check.ts",
     "migrate:mysql": "tsx scripts/migrate_json_to_mysql.ts",
     "seed:admin": "tsx scripts/seed_admin.ts",
+    "publish:scheduled": "tsx scripts/publish_scheduled.ts",
     "smoke:production": "tsx scripts/production_smoke_test.ts"
   },
   "dependencies": {
@@ -39,7 +40,6 @@
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
     "typescript": "~5.8.2"
   }
 }
