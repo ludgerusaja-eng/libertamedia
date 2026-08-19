@@ -11,7 +11,9 @@ ok() { echo "[LAUNCH GATE] PASS: $*"; }
 [ -f scripts/preflight.sh ] || fail "preflight missing"
 [ -f scripts/production_smoke_test.ts ] || fail "database smoke test missing"
 [ -f scripts/http_smoke_test.sh ] || fail "HTTP smoke test missing"
-ok "Production runtime files exist"
+[ -f scripts/backup_mysql.sh ] || fail "MySQL backup script missing"
+[ -f docs/CPANEL_CRON.md ] || fail "cPanel cron documentation missing"
+ok "Production runtime and operations files exist"
 
 if grep -RInE 'libertamedia2026|admin123|local-admin-token-' --exclude-dir=.git --exclude='*.md' --exclude='*.example' .; then
   fail "Unsafe fallback credential found"
@@ -43,5 +45,10 @@ ok "Passenger uses explicit CommonJS startup wrapper"
 
 [ ! -f app.js ] || fail "Legacy Passenger app.js still exists"
 ok "Legacy Passenger entrypoint removed"
+
+if grep -RInE 'npm ci' .cpanel.yml scripts .github --exclude='*.md' 2>/dev/null; then
+  fail "Deployment pipeline still requires stale-lockfile npm ci"
+fi
+ok "Deployment uses manifest-compatible npm install"
 
 echo "[LAUNCH GATE] Static production gate passed."
