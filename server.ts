@@ -63,17 +63,35 @@ if (fs.existsSync(distPath)) {
 // Path to persistent data file with resilient directory resolution
 function getDataDir(): string {
   const candidates = [
+    process.env.DATA_DIR,
+    "/home/libp7469/data",
     path.join(process.cwd(), "data"),
     path.resolve(currentDir, "..", "data"),
     path.resolve(currentDir, "data"),
-  ];
+  ].filter(Boolean) as string[];
   for (const d of candidates) {
     if (fs.existsSync(d)) return d;
   }
-  return path.join(process.cwd(), "data");
+  const defaultDir = path.join(process.cwd(), "data");
+  if (!fs.existsSync(defaultDir)) {
+    fs.mkdirSync(defaultDir, { recursive: true });
+  }
+  return defaultDir;
 }
 
 const DATA_DIR = getDataDir();
+
+// Auto backup database.json on server startup to prevent data loss
+try {
+  const dbPath = path.join(DATA_DIR, "database.json");
+  const backupPath = path.join(DATA_DIR, "database.json.bak");
+  if (fs.existsSync(dbPath)) {
+    fs.copyFileSync(dbPath, backupPath);
+  }
+} catch (e) {
+  console.warn('[Auto-Backup Warning]:', e);
+}
+
 const useMySQL = process.env.DATABASE_TYPE === "mysql" || Boolean(process.env.DB_PASSWORD);
 const storage = useMySQL ? new MySQLStorageAdapter(DATA_DIR) : new JsonStorageAdapter(DATA_DIR);
 
@@ -84,6 +102,36 @@ function readDatabase() {
 function writeDatabase(data: any) {
   return storage.writeDatabase(data);
 }
+
+// In-memory Rate Limiter Map for Security Protection
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function createRateLimiter(maxRequests: number, windowMs: number) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+    const ipStr = String(ip).split(',')[0].trim();
+    const now = Date.now();
+    const record = rateLimitMap.get(ipStr);
+
+    if (!record || now > record.resetTime) {
+      rateLimitMap.set(ipStr, { count: 1, resetTime: now + windowMs });
+      return next();
+    }
+
+    if (record.count >= maxRequests) {
+      return res.status(429).json({
+        success: false,
+        message: "Terlalu banyak permintaan. Silakan coba lagi beberapa saat."
+      });
+    }
+
+    record.count++;
+    return next();
+  };
+}
+
+const loginRateLimiter = createRateLimiter(5, 15 * 60 * 1000); // 5 attempts per 15 minutes
+const submitStoryRateLimiter = createRateLimiter(10, 60 * 60 * 1000); // 10 submissions per hour
 
 // Security & Authentication Configuration
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "libertamedia2026";
