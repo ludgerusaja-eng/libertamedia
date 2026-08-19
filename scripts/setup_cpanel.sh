@@ -43,7 +43,7 @@ if ! command -v node >/dev/null 2>&1; then
       break
     fi
   done
-done
+fi
 
 command -v node >/dev/null 2>&1 || fail "Node.js runtime not found in cPanel deployment environment"
 log "Node runtime: $(node -v)"
