@@ -17,6 +17,7 @@ export interface Author {
   avatar: string;
   role?: string;
   organization?: string;
+  institution?: string;
   email?: string;
 }
 
@@ -28,13 +29,19 @@ export interface Article {
   content: string;
   category: CategoryType;
   pillar?: 'BERITA' | 'OPINI' | 'CERITA' | 'GAGASAN';
+  subcategory?: string;
+  summary?: string;
   imageUrl: string;
+  image?: string;
   imageCaption?: string;
+  caption?: string;
   author: Author;
   publishedAt: string;
   readTime: string;
   isHeroHeadline?: boolean;
+  isHero?: boolean;
   isEditorsPick?: boolean;
+  isEditorChoice?: boolean;
   isTrending?: boolean;
   views?: number;
   tags?: string[];
@@ -50,6 +57,7 @@ export interface Comment {
   content: string;
   createdAt: string;
 }
+export type CommentItem = Comment;
 
 export interface VideoItem {
   id: string;
@@ -61,18 +69,8 @@ export interface VideoItem {
   views: number;
 }
 
-export interface PollOption {
-  id: string;
-  text: string;
-  votes: number;
-}
-
-export interface PollData {
-  id: string;
-  question: string;
-  options: PollOption[];
-  totalVotes: number;
-}
+export interface PollOption { id: string; text: string; votes: number; }
+export interface PollData { id: string; question: string; options: PollOption[]; totalVotes: number; }
 
 export interface CitizenSubmission {
   id: string;
@@ -85,7 +83,6 @@ export interface CitizenSubmission {
   content: string;
   submittedAt: string;
 }
-
 export type Submission = CitizenSubmission;
 
 export interface SiteSettings {
@@ -93,33 +90,9 @@ export interface SiteSettings {
   siteTagline: string;
   footerText: string;
   logoUrl?: string;
-  
-  socialLinks: {
-    instagram: string;
-    twitter: string;
-    youtube: string;
-    facebook: string;
-  };
-
-  sections: {
-    showBreakingNews: boolean;
-    showHeroSlider: boolean;
-    showEditorChoice: boolean;
-    showCitizenVoice: boolean;
-    showNewsletter: boolean;
-  };
-
-  monetization: {
-    headerBannerHtml: string;
-    inArticleAdHtml: string;
-    googleAnalyticsId: string;
-  };
+  socialLinks: { instagram: string; twitter: string; youtube: string; facebook: string };
+  sections: { showBreakingNews: boolean; showHeroSlider: boolean; showEditorChoice: boolean; showCitizenVoice: boolean; showNewsletter: boolean };
+  monetization: { headerBannerHtml: string; inArticleAdHtml: string; googleAnalyticsId: string };
 }
 
-export interface StaticPage {
-  id: string;
-  slug: string;
-  title: string;
-  content: string;
-  updatedAt: string;
-}
+export interface StaticPage { id: string; slug: string; title: string; content: string; updatedAt: string; }
