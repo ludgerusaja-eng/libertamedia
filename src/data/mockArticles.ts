@@ -1,8 +1,7 @@
 import { Article, PollData, VideoItem } from '../types';
 
-// Clean initial state: Starts from 0 sample content as requested
+// Clean initial state: production content comes from the API.
 export const INITIAL_ARTICLES: Article[] = [];
-
 export const MOCK_VIDEOS: VideoItem[] = [];
 
 export const INITIAL_POLL: PollData = {
@@ -10,6 +9,7 @@ export const INITIAL_POLL: PollData = {
   topic: 'Polling Opini Publik',
   question: 'Menurut Anda, apa sektor paling mendesak yang harus diprioritaskan demi percepatan Indonesia Emas 2045?',
   endDate: '31 Agustus 2026',
+  totalVotes: 0,
   options: [
     { id: 'opt-1', text: 'Pendidikan Berkualitas & Kesejahteraan Tenaga Pendidik', votes: 0 },
     { id: 'opt-2', text: 'Kedaulatan Pangan & Revitalisasi Pertanian Modern', votes: 0 },
