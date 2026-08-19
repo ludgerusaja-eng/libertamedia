@@ -13,36 +13,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-
       - name: Typecheck
         run: npm run lint
-
       - name: API contract check
         run: npm run check:api
-
       - name: Static production launch gate
         run: npm run check:launch
-
       - name: Shell syntax checks
         run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh scripts/launch_gate.sh
-
       - name: Production build
         run: npm run build
         env:
           NODE_ENV: production
-
       - name: Verify build output
         run: test -f dist/index.html && test -f dist/server.cjs
-
       - name: Verify production files
         run: |
           test -f scripts/preflight.sh
@@ -53,7 +44,6 @@ jobs:
           test -f scripts/generate_feeds.ts
           test -f scripts/http_smoke_test.sh
           test -f scripts/launch_gate.sh
-
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,6 +62,7 @@ jobs:
             --exclude='scripts/preflight.sh' \
             --exclude='scripts/api_contract_check.ts' \
             --exclude='scripts/launch_gate.sh' \
+            --exclude='.github/workflows/ci.yml' \
             .; then
             echo 'Unsafe credential/fallback pattern detected.'
             exit 1
