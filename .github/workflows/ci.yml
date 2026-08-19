@@ -43,6 +43,7 @@ jobs:
           test -f cpanel_mysql_setup.sql
           test -f scripts/production_smoke_test.ts
           test -f scripts/api_contract_check.ts
+          test -f scripts/publish_scheduled.ts
 
   security:
     runs-on: ubuntu-latest
