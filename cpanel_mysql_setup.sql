@@ -1,6 +1,6 @@
 -- LIBERTAMEDIA production MySQL/MariaDB schema
 -- Run on a NEW production database before switching DATABASE_TYPE=mysql.
--- Do not run destructive DROP statements against an existing production database.
+-- Safe to re-run: uses CREATE TABLE IF NOT EXISTS and non-destructive indexes.
 
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -23,8 +23,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   revoked_at DATETIME NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_sessions_user (user_id),
-  INDEX idx_sessions_expiry (expires_at)
+  INDEX idx_sessions_user (user_id), INDEX idx_sessions_expiry (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS articles (
@@ -35,12 +34,10 @@ CREATE TABLE IF NOT EXISTS articles (
   content LONGTEXT NOT NULL,
   category VARCHAR(100) NOT NULL,
   pillar ENUM('BERITA','OPINI','CERITA','GAGASAN') NOT NULL DEFAULT 'BERITA',
-  image_url TEXT NULL,
-  image_caption TEXT NULL,
+  image_url TEXT NULL, image_caption TEXT NULL,
   author_id BIGINT UNSIGNED NULL,
   status ENUM('DRAFT','REVIEW','FACT_CHECK','APPROVED','SCHEDULED','PUBLISHED','ARCHIVED') NOT NULL DEFAULT 'DRAFT',
-  scheduled_at DATETIME NULL,
-  published_at DATETIME NULL,
+  scheduled_at DATETIME NULL, published_at DATETIME NULL,
   views BIGINT UNSIGNED NOT NULL DEFAULT 0,
   is_hero TINYINT(1) NOT NULL DEFAULT 0,
   is_editor_choice TINYINT(1) NOT NULL DEFAULT 0,
@@ -48,126 +45,83 @@ CREATE TABLE IF NOT EXISTS articles (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_articles_status_date (status, published_at),
-  INDEX idx_articles_category_date (category, published_at),
-  INDEX idx_articles_author (author_id),
-  INDEX idx_articles_scheduled (status, scheduled_at)
+  INDEX idx_articles_status_date (status, published_at), INDEX idx_articles_category_date (category, published_at),
+  INDEX idx_articles_author (author_id), INDEX idx_articles_scheduled (status, scheduled_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS article_revisions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  article_id VARCHAR(100) NOT NULL,
-  editor_id BIGINT UNSIGNED NULL,
-  revision_number INT UNSIGNED NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  excerpt TEXT NULL,
-  content LONGTEXT NOT NULL,
-  change_summary VARCHAR(500) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  article_id VARCHAR(100) NOT NULL, editor_id BIGINT UNSIGNED NULL,
+  revision_number INT UNSIGNED NOT NULL, title VARCHAR(255) NOT NULL, excerpt TEXT NULL, content LONGTEXT NOT NULL,
+  change_summary VARCHAR(500) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
   FOREIGN KEY (editor_id) REFERENCES users(id) ON DELETE SET NULL,
-  UNIQUE KEY uq_article_revision (article_id, revision_number),
-  INDEX idx_revisions_article_date (article_id, created_at)
+  UNIQUE KEY uq_article_revision (article_id, revision_number), INDEX idx_revisions_article_date (article_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS tags (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL UNIQUE,
-  slug VARCHAR(120) NOT NULL UNIQUE
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, slug VARCHAR(120) NOT NULL UNIQUE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS article_tags (
-  article_id VARCHAR(100) NOT NULL,
-  tag_id BIGINT UNSIGNED NOT NULL,
-  PRIMARY KEY (article_id, tag_id),
-  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+  article_id VARCHAR(100) NOT NULL, tag_id BIGINT UNSIGNED NOT NULL, PRIMARY KEY (article_id, tag_id),
+  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS comments (
-  id VARCHAR(100) NOT NULL PRIMARY KEY,
-  article_id VARCHAR(100) NOT NULL,
-  author_name VARCHAR(160) NOT NULL,
-  content TEXT NOT NULL,
+  id VARCHAR(100) NOT NULL PRIMARY KEY, article_id VARCHAR(100) NOT NULL, author_name VARCHAR(160) NOT NULL, content TEXT NOT NULL,
   status ENUM('PENDING','APPROVED','REJECTED','SPAM','HIDDEN','DELETED') NOT NULL DEFAULT 'PENDING',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  moderated_at DATETIME NULL,
-  moderated_by BIGINT UNSIGNED NULL,
-  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
-  FOREIGN KEY (moderated_by) REFERENCES users(id) ON DELETE SET NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, moderated_at DATETIME NULL, moderated_by BIGINT UNSIGNED NULL,
+  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE, FOREIGN KEY (moderated_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_comments_article_status (article_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS media (
-  id VARCHAR(100) NOT NULL PRIMARY KEY,
-  uploaded_by BIGINT UNSIGNED NULL,
-  original_name VARCHAR(255) NOT NULL,
-  mime_type VARCHAR(100) NOT NULL,
-  storage_path TEXT NOT NULL,
-  width INT UNSIGNED NULL,
-  height INT UNSIGNED NULL,
-  size_bytes BIGINT UNSIGNED NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_media_uploader_date (uploaded_by, created_at)
+  id VARCHAR(100) NOT NULL PRIMARY KEY, uploaded_by BIGINT UNSIGNED NULL, original_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(100) NOT NULL, storage_path TEXT NOT NULL, width INT UNSIGNED NULL, height INT UNSIGNED NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL, INDEX idx_media_uploader_date (uploaded_by, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS submissions (
-  id VARCHAR(100) NOT NULL PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  category VARCHAR(100) NOT NULL DEFAULT 'Opini',
-  author_name VARCHAR(160) NOT NULL,
-  email VARCHAR(190) NULL,
-  institution VARCHAR(190) NULL,
-  content LONGTEXT NOT NULL,
+  id VARCHAR(100) NOT NULL PRIMARY KEY, title VARCHAR(255) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'Opini',
+  author_name VARCHAR(160) NOT NULL, email VARCHAR(190) NULL, institution VARCHAR(190) NULL, content LONGTEXT NOT NULL,
   status ENUM('SUBMITTED','SCREENING','FACT_CHECK','EDITING','APPROVED','PUBLISHED','REJECTED') NOT NULL DEFAULT 'SUBMITTED',
-  submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  reviewed_at DATETIME NULL,
-  reviewed_by BIGINT UNSIGNED NULL,
-  FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_submissions_status_date (status, submitted_at)
+  submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, reviewed_at DATETIME NULL, reviewed_by BIGINT UNSIGNED NULL,
+  FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL, INDEX idx_submissions_status_date (status, submitted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS subscribers (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(190) NOT NULL UNIQUE,
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) NOT NULL UNIQUE,
+  is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS site_settings (
-  id INT NOT NULL PRIMARY KEY,
-  data JSON NOT NULL,
+  id INT NOT NULL PRIMARY KEY, data JSON NOT NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS pages (
-  id VARCHAR(100) NOT NULL PRIMARY KEY,
-  slug VARCHAR(255) NOT NULL UNIQUE,
-  title VARCHAR(255) NOT NULL,
-  content LONGTEXT NOT NULL,
+  id VARCHAR(100) NOT NULL PRIMARY KEY, slug VARCHAR(255) NOT NULL UNIQUE, title VARCHAR(255) NOT NULL, content LONGTEXT NOT NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NULL, action VARCHAR(80) NOT NULL,
+  entity_type VARCHAR(80) NOT NULL, entity_id VARCHAR(100) NULL, metadata JSON NULL, ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(500) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL, INDEX idx_audit_entity (entity_type, entity_id, created_at), INDEX idx_audit_user_date (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS rate_limits (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  user_id BIGINT UNSIGNED NULL,
-  action VARCHAR(80) NOT NULL,
-  entity_type VARCHAR(80) NOT NULL,
-  entity_id VARCHAR(100) NULL,
-  metadata JSON NULL,
-  ip_address VARCHAR(45) NULL,
-  user_agent VARCHAR(500) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_audit_entity (entity_type, entity_id, created_at),
-  INDEX idx_audit_user_date (user_id, created_at)
+  rate_key CHAR(64) NOT NULL UNIQUE,
+  request_count INT UNSIGNED NOT NULL DEFAULT 0,
+  expires_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_rate_limits_expiry (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO site_settings (id, data)
-VALUES (1, JSON_OBJECT(
-  'siteName', 'LIBERTAMEDIA',
-  'siteTagline', 'Media Untuk Semua • Indeks Berita Publik',
-  'footerText', '© 2026 LIBERTAMEDIA. Seluruh hak cipta dilindungi.'
-))
+VALUES (1, JSON_OBJECT('siteName','LIBERTAMEDIA','siteTagline','Media Untuk Semua • Indeks Berita Publik','footerText','© 2026 LIBERTAMEDIA. Seluruh hak cipta dilindungi.'))
 ON DUPLICATE KEY UPDATE id = id;
