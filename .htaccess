@@ -10,25 +10,8 @@
   RewriteEngine On
   RewriteBase /
 
-  # 1. Allow direct access to real existing static files and directories (assets, uploads, images)
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
+  # 1. Allow direct static access ONLY for real asset files in assets/ or public files
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteCond %{REQUEST_URI} ^/(assets|favicon|uploads|images|media)/ [NC]
   RewriteRule ^ - [L]
-
-  # 2. Pass all API requests (/api/*) directly to Node.js backend (app.js)
-  RewriteRule ^api/(.*)$ app.js [QSA,L]
-  RewriteRule ^api$ app.js [QSA,L]
-
-  # 3. Pass all SSR dynamic routes (/berita/*, /p/*, /rss.xml, /sitemap.xml, /robots.txt) to Node.js backend
-  RewriteRule ^berita/(.*)$ app.js [QSA,L]
-  RewriteRule ^p/(.*)$ app.js [QSA,L]
-  RewriteRule ^rss\.xml$ app.js [QSA,L]
-  RewriteRule ^sitemap\.xml$ app.js [QSA,L]
-  RewriteRule ^robots\.txt$ app.js [QSA,L]
-
-  # 4. Fallback all remaining frontend SPA subroutes to index.html for hydration
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
 </IfModule>
