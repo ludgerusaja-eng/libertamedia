@@ -13,7 +13,7 @@ let _tokenCache: string | null = typeof window !== 'undefined' ? sessionStorage.
 
 function getAdminToken(): string | null {
   if (!_tokenCache && typeof window !== 'undefined') {
-    try { _tokenCache = sessionStorage.getItem('liberta_admin_token'); } catch (e) {}
+    try { _tokenCache = sessionStorage.getItem('liberta_admin_token'); } catch {}
   }
   return _tokenCache;
 }
@@ -24,14 +24,14 @@ function setAdminToken(token: string | null): void {
     try {
       if (token) sessionStorage.setItem('liberta_admin_token', token);
       else sessionStorage.removeItem('liberta_admin_token');
-    } catch (e) {}
+    } catch {}
   }
 }
 
 function getAdminAuthHeaders(): Record<string, string> {
   const token = getAdminToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
@@ -50,10 +50,12 @@ export const api = {
   getAuthHeaders(): Record<string, string> { return getAdminAuthHeaders(); },
 
   async login(password: string, email?: string) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail || !password) throw new Error('Email dan password wajib diisi');
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: normalizedEmail, password }),
     });
     const data = await safeJsonResponse(res);
     if (!res.ok || !data?.success || !data?.token) throw new Error(data?.message || 'Email atau password tidak valid');
@@ -72,14 +74,17 @@ export const api = {
     return safeJsonResponse(res);
   },
 
-  async getArticles(params?: { category?: CategoryType; pillar?: string; tag?: string; q?: string }): Promise<Article[]> {
+  async getArticles(params?: { category?: CategoryType; pillar?: string; tag?: string; q?: string; page?: number; limit?: number }): Promise<Article[]> {
     try {
       const searchParams = new URLSearchParams();
       if (params?.category && params.category !== 'Semua') searchParams.append('category', params.category);
       if (params?.pillar) searchParams.append('pillar', params.pillar);
       if (params?.tag) searchParams.append('tag', params.tag);
       if (params?.q) searchParams.append('q', params.q);
-      const res = await fetch(`/api/articles?${searchParams.toString()}`);
+      if (params?.page) searchParams.append('page', String(params.page));
+      if (params?.limit) searchParams.append('limit', String(params.limit));
+      const query = searchParams.toString();
+      const res = await fetch(`/api/articles${query ? `?${query}` : ''}`);
       if (!res.ok) throw new Error('Gagal mengambil data artikel');
       const data = await safeJsonResponse(res);
       return data.data || [];
@@ -88,7 +93,7 @@ export const api = {
 
   async getArticleById(id: string): Promise<Article | null> {
     try {
-      const res = await fetch(`/api/articles/${id}`);
+      const res = await fetch(`/api/articles/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error('Artikel tidak ditemukan');
       const data = await safeJsonResponse(res);
       return data.data;
@@ -103,20 +108,20 @@ export const api = {
   },
 
   async updateArticle(id: string, articleData: Partial<Article>): Promise<Article> {
-    const res = await fetch(`/api/articles/${id}`, { method: 'PUT', headers: getAdminAuthHeaders(), body: JSON.stringify(articleData) });
+    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`, { method: 'PUT', headers: getAdminAuthHeaders(), body: JSON.stringify(articleData) });
     const data = await safeJsonResponse(res).catch(() => ({}));
     if (!res.ok) throw new Error(data.message || 'Gagal memperbarui artikel');
     return data.data;
   },
 
   async deleteArticle(id: string): Promise<boolean> {
-    const res = await fetch(`/api/articles/${id}`, { method: 'DELETE', headers: getAdminAuthHeaders() });
+    const res = await fetch(`/api/articles/${encodeURIComponent(id)}`, { method: 'DELETE', headers: getAdminAuthHeaders() });
     return res.ok;
   },
 
   async sendReaction(articleId: string, type: 'claps' | 'insightful' | 'inspiring' | 'critical', delta: 1 | -1 = 1) {
     try {
-      const res = await fetch(`/api/articles/${articleId}/reactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, delta }) });
+      const res = await fetch(`/api/articles/${encodeURIComponent(articleId)}/reactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, delta }) });
       if (!res.ok) return null;
       const data = await safeJsonResponse(res);
       return data.reactions;
@@ -124,7 +129,7 @@ export const api = {
   },
 
   async addComment(articleId: string, author: string, content: string) {
-    const res = await fetch(`/api/articles/${articleId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ author, content }) });
+    const res = await fetch(`/api/articles/${encodeURIComponent(articleId)}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ author, content }) });
     const data = await safeJsonResponse(res).catch(() => ({}));
     if (!res.ok) throw new Error(data.message || 'Gagal mengirim komentar');
     return data;
@@ -147,20 +152,20 @@ export const api = {
   },
 
   async publishSubmission(submissionId: string): Promise<Article> {
-    const res = await fetch(`/api/submissions/${submissionId}/publish`, { method: 'POST', headers: getAdminAuthHeaders() });
+    const res = await fetch(`/api/submissions/${encodeURIComponent(submissionId)}/publish`, { method: 'POST', headers: getAdminAuthHeaders() });
     const data = await safeJsonResponse(res).catch(() => ({}));
     if (!res.ok) throw new Error(data.message || 'Gagal menerbitkan naskah warga');
     return data.data;
   },
 
   async deleteSubmission(submissionId: string): Promise<boolean> {
-    const res = await fetch(`/api/submissions/${submissionId}`, { method: 'DELETE', headers: getAdminAuthHeaders() });
+    const res = await fetch(`/api/submissions/${encodeURIComponent(submissionId)}`, { method: 'DELETE', headers: getAdminAuthHeaders() });
     return res.ok;
   },
 
   async getStats(): Promise<ServerStats | null> {
     try {
-      const res = await fetch('/api/stats');
+      const res = await fetch('/api/stats', { headers: getAdminAuthHeaders() });
       if (!res.ok) return null;
       const data = await safeJsonResponse(res);
       return data.data;
@@ -175,16 +180,17 @@ export const api = {
   },
 
   async uploadImage(file: File): Promise<string> {
+    if (file.size > 10 * 1024 * 1024) throw new Error('Ukuran gambar maksimal 10MB');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Format gambar hanya PNG, JPEG, atau WebP');
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async () => {
         try {
-          const imageBase64 = reader.result as string;
-          const res = await fetch('/api/upload', { method: 'POST', headers: getAdminAuthHeaders(), body: JSON.stringify({ imageBase64 }) });
+          const res = await fetch('/api/upload', { method: 'POST', headers: getAdminAuthHeaders(), body: JSON.stringify({ imageBase64: reader.result as string }) });
           const data = await safeJsonResponse(res);
           if (!res.ok) throw new Error(data.message || 'Gagal meng-upload gambar');
           resolve(data.url);
-        } catch (err: any) { reject(err); }
+        } catch (err) { reject(err); }
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
@@ -192,13 +198,7 @@ export const api = {
   },
 
   async getSettings(): Promise<any> {
-    try {
-      const res = await fetch('/api/settings');
-      if (res.ok) {
-        const data = await safeJsonResponse(res);
-        return data.data || null;
-      }
-    } catch (err) { console.warn('API getSettings:', err); }
+    try { const res = await fetch('/api/settings'); if (res.ok) { const data = await safeJsonResponse(res); return data.data || null; } } catch (err) { console.warn('API getSettings:', err); }
     return null;
   },
 
@@ -210,44 +210,10 @@ export const api = {
   },
 
   async getPages(): Promise<any[]> {
-    try { const res = await fetch('/api/pages'); if (!res.ok) return []; const data = await safeJsonResponse(res); return data.data || []; }
-    catch { return []; }
+    try { const res = await fetch('/api/pages'); if (!res.ok) return []; const data = await safeJsonResponse(res); return data.data || []; } catch { return []; }
   },
 
   async getPageBySlug(slug: string): Promise<any | null> {
-    try { const res = await fetch(`/api/pages/${slug}`); if (!res.ok) return null; const data = await safeJsonResponse(res); return data.data; }
-    catch { return null; }
-  },
-
-  async savePage(pageData: { id?: string; slug: string; title: string; content: string }): Promise<any> {
-    const method = pageData.id ? 'PUT' : 'POST';
-    const url = pageData.id ? `/api/pages/${pageData.id}` : '/api/pages';
-    const res = await fetch(url, { method, headers: getAdminAuthHeaders(), body: JSON.stringify(pageData) });
-    const data = await safeJsonResponse(res).catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || 'Gagal menyimpan halaman statis');
-    return data.data;
-  },
-
-  async deletePage(id: string): Promise<boolean> {
-    const res = await fetch(`/api/pages/${id}`, { method: 'DELETE', headers: getAdminAuthHeaders() });
-    return res.ok;
+    try { const res = await fetch(`/api/pages/${encodeURIComponent(slug)}`); if (!res.ok) return null; const data = await safeJsonResponse(res); return data.data; } catch { return null; }
   },
 };
-
-export const fetchArticles = async (_page = 1, _perPage = 20): Promise<Article[]> => api.getArticles();
-export const fetchArticleById = async (id: string): Promise<Article | null> => api.getArticleById(id);
-export const fetchArticlesByCategory = async (categoryName: string): Promise<Article[]> => {
-  const all = await api.getArticles();
-  if (!categoryName || categoryName === 'Semua') return all;
-  return all.filter((a) => a.category?.toLowerCase() === categoryName.toLowerCase());
-};
-export const createArticle = (data: any) => api.createArticle(data);
-export const updateArticle = (id: string, data: any) => api.updateArticle(id, data);
-export const deleteArticle = (id: string) => api.deleteArticle(id);
-export const saveArticle = (data: any) => data.id ? api.updateArticle(data.id, data) : api.createArticle(data);
-export const fetchSubmissions = () => api.getSubmissions();
-export const publishSubmission = (id: string) => api.publishSubmission(id);
-export const deleteSubmission = (id: string) => api.deleteSubmission(id);
-export const fetchSettings = () => api.getSettings();
-export const saveSiteSettings = (settings: any) => api.saveSettings(settings);
-export const uploadImage = (file: File) => api.uploadImage(file);
