@@ -1,0 +1,57 @@
+name: LIBERTAMEDIA Runtime Hardening
+
+on:
+  push:
+    branches: ['agent/production-hardening']
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-runtime:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(runtime): apply production migration') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply runtime safety migration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('server.ts')
+          s = p.read_text()
+
+          # Remove known credential/session bypasses from the legacy runtime.
+          s = s.replace('const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "libertamedia2026";', 'const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;')
+          s = s.replace('if (!process.env.ADMIN_PASSWORD) {\n  console.warn("⚠️ [SECURITY WARNING] Default ADMIN_PASSWORD in use. Set ADMIN_PASSWORD in production .env!");\n}', 'if (process.env.NODE_ENV === "production" && !process.env.ADMIN_PASSWORD) {\n  throw new Error("ADMIN_PASSWORD must not be used as a production authentication secret; use MySQL authentication.");\n}')
+          s = s.replace(' || safeComparePassword(password, "admin123")', '')
+          s = s.replace('token.startsWith("local-admin-token-") || token === ADMIN_PASSWORD', 'false')
+
+          # Never allow a production deployment to silently choose JSON storage.
+          old = 'const useMySQL = process.env.DATABASE_TYPE === "mysql" || Boolean(process.env.DB_PASSWORD);\nconst storage = useMySQL ? new MySQLStorageAdapter(DATA_DIR) : new JsonStorageAdapter(DATA_DIR);'
+          new = '''const useMySQL = process.env.DATABASE_TYPE === "mysql" || Boolean(process.env.DB_PASSWORD);\nif (process.env.NODE_ENV === "production" && !useMySQL) {\n  throw new Error("Production requires DATABASE_TYPE=mysql and MySQL credentials.");\n}\nconst storage = useMySQL ? new MySQLStorageAdapter(DATA_DIR) : new JsonStorageAdapter(DATA_DIR);'''
+          s = s.replace(old, new)
+
+          p.write_text(s)
+          PY
+
+      - name: Commit migration
+        run: |
+          git config user.name 'libertamedia-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add server.ts
+          if git diff --cached --quiet; then
+            echo 'No runtime migration changes required.'
+            exit 0
+          fi
+          git commit -m 'chore(runtime): apply production migration'
+          git push
