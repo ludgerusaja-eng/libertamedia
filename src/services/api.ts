@@ -415,6 +415,17 @@ const getWpApiUrl = (): string => {
   return 'https://jealous-reaction.localsite.io/wp-json/wp/v2';
 };
 
+const getWpHeaders = (): HeadersInit => {
+  const headers: Record<string, string> = {
+    'Accept': 'application/json'
+  };
+  const auth = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WP_AUTH) || (typeof process !== 'undefined' && process.env?.VITE_WP_AUTH) || 'Basic dm95YWdlOnBlcmZlY3Q=';
+  if (auth) {
+    headers['Authorization'] = auth.startsWith('Basic ') ? auth : `Basic ${auth}`;
+  }
+  return headers;
+};
+
 // Helper Transformer: Format data WordPress ke Interface Article Frontend Liberta
 export const transformWpPost = (post: any): Article => {
   const featuredImage = 
@@ -456,7 +467,7 @@ export const fetchArticles = async (page = 1, perPage = 20): Promise<Article[]> 
   const wpUrl = getWpApiUrl();
   if (wpUrl) {
     try {
-      const res = await fetch(`${wpUrl}/posts?_embed&page=${page}&per_page=${perPage}&status=publish`).catch(() => null);
+      const res = await fetch(`${wpUrl}/posts?_embed&page=${page}&per_page=${perPage}&status=publish`, { headers: getWpHeaders() }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => null);
         if (Array.isArray(data) && data.length > 0) {
@@ -474,7 +485,7 @@ export const fetchArticleById = async (id: string): Promise<Article | null> => {
   const wpUrl = getWpApiUrl();
   if (wpUrl) {
     try {
-      const res = await fetch(`${wpUrl}/posts/${id}?_embed`).catch(() => null);
+      const res = await fetch(`${wpUrl}/posts/${id}?_embed`, { headers: getWpHeaders() }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => null);
         if (data && data.id) {
@@ -492,7 +503,7 @@ export const fetchArticlesByCategory = async (categoryId: number): Promise<Artic
   const wpUrl = getWpApiUrl();
   if (wpUrl) {
     try {
-      const res = await fetch(`${wpUrl}/posts?_embed&categories=${categoryId}&status=publish`).catch(() => null);
+      const res = await fetch(`${wpUrl}/posts?_embed&categories=${categoryId}&status=publish`, { headers: getWpHeaders() }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json().catch(() => null);
         if (Array.isArray(data)) {

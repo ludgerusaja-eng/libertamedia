@@ -1040,15 +1040,16 @@ app.get("/berita/:id", async (req, res) => {
 
   // 1. Attempt to fetch from Headless WordPress REST API
   const wpBaseUrl = process.env.WP_BASE_URL || 'https://jealous-reaction.localsite.io';
+  const wpHeaders = { 'Authorization': process.env.WP_AUTH || 'Basic dm95YWdlOnBlcmZlY3Q=' };
   try {
     let wpPost: any = null;
-    const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?slug=${encodeURIComponent(articleIdOrSlug)}&_embed`);
+    const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?slug=${encodeURIComponent(articleIdOrSlug)}&_embed`, { headers: wpHeaders });
     if (wpRes.ok) {
       const posts = await wpRes.json();
       if (Array.isArray(posts) && posts.length > 0) wpPost = posts[0];
     }
     if (!wpPost && !isNaN(Number(articleIdOrSlug))) {
-      const wpResId = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts/${articleIdOrSlug}?_embed`);
+      const wpResId = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts/${articleIdOrSlug}?_embed`, { headers: wpHeaders });
       if (wpResId.ok) wpPost = await wpResId.json();
     }
 
