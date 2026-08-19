@@ -27,7 +27,7 @@ jobs:
       - name: Static production launch gate
         run: npm run check:launch
       - name: Shell syntax checks
-        run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh scripts/launch_gate.sh
+        run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh scripts/launch_gate.sh scripts/backup_mysql.sh
       - name: Production build
         run: npm run build
         env:
@@ -36,14 +36,17 @@ jobs:
         run: test -f dist/index.html && test -f dist/server.cjs
       - name: Verify production files
         run: |
-          test -f scripts/preflight.sh
+          test -f app.cjs
+          test -f .htaccess
           test -f cpanel_mysql_setup.sql
+          test -f scripts/preflight.sh
           test -f scripts/production_smoke_test.ts
           test -f scripts/api_contract_check.ts
           test -f scripts/publish_scheduled.ts
           test -f scripts/generate_feeds.ts
           test -f scripts/http_smoke_test.sh
           test -f scripts/launch_gate.sh
+          test -f scripts/backup_mysql.sh
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -67,3 +70,4 @@ jobs:
             echo 'Unsafe credential/fallback pattern detected.'
             exit 1
           fi
+          echo 'Secret scan passed.'
