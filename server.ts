@@ -1039,7 +1039,7 @@ app.get("/berita/:id", async (req, res) => {
   } | null = null;
 
   // 1. Attempt to fetch from Headless WordPress REST API
-  const wpBaseUrl = process.env.WP_BASE_URL || 'https://admin.libertamedia.com';
+  const wpBaseUrl = process.env.WP_BASE_URL || 'https://jealous-reaction.localsite.io';
   try {
     let wpPost: any = null;
     const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?slug=${encodeURIComponent(articleIdOrSlug)}&_embed`);
