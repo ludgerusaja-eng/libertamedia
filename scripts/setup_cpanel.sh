@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # LIBERTAMEDIA production deployment hook for cPanel / Passenger.
-DEPLOYPATH="/home/libp7469/public_html"
-BACKUP_ROOT="/home/libp7469/deploy_backups"
+DEPLOYPATH="${DEPLOYPATH:-/home/libp7469/public_html}"
+BACKUP_ROOT="${BACKUP_ROOT:-/home/libp7469/deploy_backups}"
 BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d_%H%M%S)"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -40,14 +40,15 @@ chmod 750 "$UPLOAD_DIR"
 tar --exclude='node_modules' --exclude='tmp' --exclude='dist/uploads' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
 
 cd "$DEPLOYPATH"
-# package-lock.json is retained for compatibility/history but is intentionally
-# not used as the deployment source of truth until it is regenerated from the
-# current production package manifest.
+# Dependency resolution uses the current production package manifest.
 npm install --no-audit --no-fund
 npm rebuild sharp
 
 [ -f "$DEPLOYPATH/dist/server.cjs" ] || fail "dist/server.cjs is missing; deploy a successful production build first"
 [ -f "$DEPLOYPATH/dist/index.html" ] || fail "dist/index.html is missing; deploy a successful production build first"
+[ -f "$DEPLOYPATH/app.cjs" ] || fail "app.cjs is missing; Passenger cannot start the application"
+
+grep -q 'PassengerStartupFile app.cjs' "$DEPLOYPATH/.htaccess" || fail ".htaccess is not configured for app.cjs"
 
 # Regenerate SEO feeds from the current MySQL state before Passenger restart.
 npm run generate:feeds || fail "SEO feed generation failed"
