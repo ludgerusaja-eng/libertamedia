@@ -30,16 +30,20 @@ set +a
 chmod +x "$DEPLOYPATH/scripts/preflight.sh"
 "$DEPLOYPATH/scripts/preflight.sh" || fail "Production environment preflight failed"
 
-mkdir -p "$BACKUP_ROOT"
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$BACKUP_ROOT" "$BACKUP_DIR"
 tar --exclude='node_modules' --exclude='tmp' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
 
 cd "$DEPLOYPATH"
-npm ci --omit=dev
+# Keep tsx available because scheduled publishing/feed generation are operational
+# cPanel jobs. The production server itself still runs from bundled dist/server.cjs.
+npm ci
 npm rebuild sharp
 
 [ -f "$DEPLOYPATH/dist/server.cjs" ] || fail "dist/server.cjs is missing; deploy a successful production build first"
 [ -f "$DEPLOYPATH/dist/index.html" ] || fail "dist/index.html is missing; deploy a successful production build first"
+
+# Regenerate SEO feeds from the current MySQL state before Passenger restart.
+npm run generate:feeds || fail "SEO feed generation failed"
 
 mkdir -p "$DEPLOYPATH/tmp"
 touch "$DEPLOYPATH/tmp/restart.txt"
