@@ -260,14 +260,63 @@ app.get("/api/auth/me", (req, res) => {
  * ----------------------------------------------------------- */
 
 // 1. GET /api/articles - List articles with pagination, status filter, & search
-app.get("/api/articles", (req, res) => {
+app.get("/api/articles", async (req, res) => {
+  const { category, tag, q, page = 1, limit = 50 } = req.query;
   const db = readDatabase();
-  let result = [...(db.articles || [])];
+  let result = [...db.articles];
 
-  const { category, pillar, tag, q, status, page = 1, limit = 50 } = req.query;
+  // Fetch live articles from WordPress REST API
+  const wpBaseUrl = process.env.WP_BASE_URL || 'https://jealous-reaction.localsite.io';
+  const wpHeaders = { 'Authorization': process.env.WP_AUTH || 'Basic dm95YWdlOnBlcmZlY3Q=' };
 
-  if (status) {
-    result = result.filter((a) => (a.status || "PUBLISHED") === status);
+  try {
+    const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?_embed&per_page=50&status=publish`, { headers: wpHeaders }).catch(() => null);
+    if (wpRes && wpRes.ok) {
+      const wpPosts = await wpRes.json().catch(() => null);
+      if (Array.isArray(wpPosts) && wpPosts.length > 0) {
+        const transformedWpArticles = wpPosts.map((post: any) => {
+          const featuredImage = 
+            post._embedded?.['wp:featuredmedia']?.[0]?.source_url || 
+            post.featured_media_url ||
+            'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
+          const categoryName = post._embedded?.['wp:term']?.[0]?.[0]?.name || 'Pemerintahan';
+          const authorName = post._embedded?.author?.[0]?.name || post.author_name || 'Redaksi Liberta';
+          const authorAvatar = post._embedded?.author?.[0]?.avatar_urls?.['96'] || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';
+
+          return {
+            id: post.id.toString(),
+            title: post.title?.rendered || post.title || 'Tanpa Judul',
+            slug: post.slug || post.id.toString(),
+            summary: post.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || post.title?.rendered || '',
+            excerpt: post.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || post.title?.rendered || '',
+            category: categoryName,
+            publishedAt: post.date ? new Date(post.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terbaru',
+            author: {
+              name: authorName,
+              avatar: authorAvatar,
+              role: 'Tim Redaksi'
+            },
+            image: featuredImage,
+            imageUrl: featuredImage,
+            content: post.content?.rendered || post.content || '',
+            readTime: '3 min baca',
+            isHeroHeadline: Boolean(post.sticky),
+            isEditorsPick: Boolean(post.sticky),
+            views: post.meta?._views_count || 150
+          };
+        });
+
+        // Prepend WP posts at the top of result list
+        result = [...transformedWpArticles, ...result];
+      }
+    }
+  } catch (err) {
+    console.warn('[API Articles WP fetch warning]:', err);
+  }
+
+  if (category) {
+    const catStr = String(category).toLowerCase();
+    result = result.filter((a) => a.category && a.category.toLowerCase() === catStr);
   }
 
   if (category && category !== "Semua") {
