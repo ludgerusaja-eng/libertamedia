@@ -6,7 +6,7 @@ ok() { echo "[LAUNCH GATE] PASS: $*"; }
 
 [ -f package.json ] || fail "package.json missing"
 [ -f server.production.ts ] || fail "server.production.ts missing"
-[ -f app.js ] || fail "app.js missing"
+[ -f app.cjs ] || fail "app.cjs missing"
 [ -f cpanel_mysql_setup.sql ] || fail "MySQL schema missing"
 [ -f scripts/preflight.sh ] || fail "preflight missing"
 [ -f scripts/production_smoke_test.ts ] || fail "database smoke test missing"
@@ -18,7 +18,7 @@ if grep -RInE 'libertamedia2026|admin123|local-admin-token-' --exclude-dir=.git 
 fi
 ok "No known legacy fallback credentials"
 
-if grep -RInE 'ADMIN_PASSWORD|JWT_SECRET' server.production.ts app.js src scripts --exclude='*.md' 2>/dev/null; then
+if grep -RInE 'ADMIN_PASSWORD|JWT_SECRET' server.production.ts app.cjs src scripts --exclude='*.md' 2>/dev/null; then
   fail "Legacy runtime credential dependency found"
 fi
 ok "Production runtime does not depend on legacy password/JWT env vars"
@@ -37,5 +37,11 @@ if grep -nE 'DATABASE_TYPE.*json|JsonStorageAdapter' server.production.ts >/dev/
   fail "JSON storage fallback detected in production runtime"
 fi
 ok "No JSON storage fallback in production runtime"
+
+grep -q 'PassengerStartupFile app.cjs' .htaccess || fail "Passenger is not configured to use app.cjs"
+ok "Passenger uses explicit CommonJS startup wrapper"
+
+[ ! -f app.js ] || fail "Legacy Passenger app.js still exists"
+ok "Legacy Passenger entrypoint removed"
 
 echo "[LAUNCH GATE] Static production gate passed."
