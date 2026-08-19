@@ -29,8 +29,11 @@ jobs:
       - name: API contract check
         run: npm run check:api
 
+      - name: Static production launch gate
+        run: npm run check:launch
+
       - name: Shell syntax checks
-        run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh
+        run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh scripts/launch_gate.sh
 
       - name: Production build
         run: npm run build
@@ -49,6 +52,7 @@ jobs:
           test -f scripts/publish_scheduled.ts
           test -f scripts/generate_feeds.ts
           test -f scripts/http_smoke_test.sh
+          test -f scripts/launch_gate.sh
 
   security:
     runs-on: ubuntu-latest
@@ -67,6 +71,7 @@ jobs:
             --exclude='*.example' \
             --exclude='scripts/preflight.sh' \
             --exclude='scripts/api_contract_check.ts' \
+            --exclude='scripts/launch_gate.sh' \
             .; then
             echo 'Unsafe credential/fallback pattern detected.'
             exit 1
