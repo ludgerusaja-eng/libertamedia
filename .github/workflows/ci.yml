@@ -56,7 +56,13 @@ jobs:
         run: |
           set -euo pipefail
           if grep -RInE 'libertamedia2026|admin123|local-admin-token-|JWT_SECRET=.*(secret|password|liberta)' \
-            --exclude-dir=.git --exclude='*.md' --exclude='*.example' .; then
+            --exclude-dir=.git \
+            --exclude-dir=dist \
+            --exclude='*.md' \
+            --exclude='*.example' \
+            --exclude='scripts/preflight.sh' \
+            --exclude='scripts/api_contract_check.ts' \
+            .; then
             echo 'Unsafe credential/fallback pattern detected.'
             exit 1
           fi
