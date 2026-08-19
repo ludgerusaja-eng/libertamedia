@@ -260,59 +260,10 @@ app.get("/api/auth/me", (req, res) => {
  * ----------------------------------------------------------- */
 
 // 1. GET /api/articles - List articles with pagination, status filter, & search
-app.get("/api/articles", async (req, res) => {
+app.get("/api/articles", (req, res) => {
   const { category, tag, q, page = 1, limit = 50 } = req.query;
   const db = readDatabase();
   let result = [...db.articles];
-
-  // Fetch live articles from WordPress REST API
-  const wpBaseUrl = process.env.WP_BASE_URL || 'https://jealous-reaction.localsite.io';
-  const wpHeaders = { 'Authorization': process.env.WP_AUTH || 'Basic dm95YWdlOnBlcmZlY3Q=' };
-
-  try {
-    const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?_embed&per_page=50&status=publish`, { headers: wpHeaders }).catch(() => null);
-    if (wpRes && wpRes.ok) {
-      const wpPosts = await wpRes.json().catch(() => null);
-      if (Array.isArray(wpPosts) && wpPosts.length > 0) {
-        const transformedWpArticles = wpPosts.map((post: any) => {
-          const featuredImage = 
-            post._embedded?.['wp:featuredmedia']?.[0]?.source_url || 
-            post.featured_media_url ||
-            'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
-          const categoryName = post._embedded?.['wp:term']?.[0]?.[0]?.name || 'Pemerintahan';
-          const authorName = post._embedded?.author?.[0]?.name || post.author_name || 'Redaksi Liberta';
-          const authorAvatar = post._embedded?.author?.[0]?.avatar_urls?.['96'] || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';
-
-          return {
-            id: post.id.toString(),
-            title: post.title?.rendered || post.title || 'Tanpa Judul',
-            slug: post.slug || post.id.toString(),
-            summary: post.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || post.title?.rendered || '',
-            excerpt: post.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || post.title?.rendered || '',
-            category: categoryName,
-            publishedAt: post.date ? new Date(post.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terbaru',
-            author: {
-              name: authorName,
-              avatar: authorAvatar,
-              role: 'Tim Redaksi'
-            },
-            image: featuredImage,
-            imageUrl: featuredImage,
-            content: post.content?.rendered || post.content || '',
-            readTime: '3 min baca',
-            isHeroHeadline: Boolean(post.sticky),
-            isEditorsPick: Boolean(post.sticky),
-            views: post.meta?._views_count || 150
-          };
-        });
-
-        // Prepend WP posts at the top of result list
-        result = [...transformedWpArticles, ...result];
-      }
-    }
-  } catch (err) {
-    console.warn('[API Articles WP fetch warning]:', err);
-  }
 
   if (category) {
     const catStr = String(category).toLowerCase();
@@ -1087,58 +1038,18 @@ app.get("/berita/:id", async (req, res) => {
     publishedDate: string;
   } | null = null;
 
-  // 1. Attempt to fetch from Headless WordPress REST API
-  const wpBaseUrl = process.env.WP_BASE_URL || 'https://jealous-reaction.localsite.io';
-  const wpHeaders = { 'Authorization': process.env.WP_AUTH || 'Basic dm95YWdlOnBlcmZlY3Q=' };
-  try {
-    let wpPost: any = null;
-    const wpRes = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts?slug=${encodeURIComponent(articleIdOrSlug)}&_embed`, { headers: wpHeaders });
-    if (wpRes.ok) {
-      const posts = await wpRes.json();
-      if (Array.isArray(posts) && posts.length > 0) wpPost = posts[0];
-    }
-    if (!wpPost && !isNaN(Number(articleIdOrSlug))) {
-      const wpResId = await fetch(`${wpBaseUrl}/wp-json/wp/v2/posts/${articleIdOrSlug}?_embed`, { headers: wpHeaders });
-      if (wpResId.ok) wpPost = await wpResId.json();
-    }
-
-    if (wpPost) {
-      const featuredImage = 
-        wpPost._embedded?.['wp:featuredmedia']?.[0]?.source_url || 
-        wpPost.featured_media_url ||
-        'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
-      const categoryName = wpPost._embedded?.['wp:term']?.[0]?.[0]?.name || 'Pemerintahan';
-      const authorName = wpPost._embedded?.author?.[0]?.name || 'Redaksi Liberta';
-
-      articleMeta = {
-        title: wpPost.title?.rendered || 'Berita libertamedia',
-        summary: wpPost.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || 'Portal berita nasional & opini publik independen.',
-        image: featuredImage,
-        slugOrId: wpPost.slug || wpPost.id.toString(),
-        authorName,
-        category: categoryName,
-        publishedDate: wpPost.date || new Date().toISOString()
-      };
-    }
-  } catch (err) {
-    console.warn('WP REST API SSR fetch warning:', err);
-  }
-
-  // 2. Fallback to local database if WP API is unreachable
-  if (!articleMeta) {
-    const db = readDatabase();
-    const article = db.articles.find((a) => a.id === articleIdOrSlug || a.slug === articleIdOrSlug);
-    if (article) {
-      articleMeta = {
-        title: article.title,
-        summary: article.summary || article.excerpt || "Portal berita nasional & opini publik independen.",
-        image: article.image || article.imageUrl || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200",
-        slugOrId: article.slug || article.id,
-        authorName: article.author?.name || "Redaksi Liberta",
-        category: article.category || "Berita",
-        publishedDate: article.publishedAt || new Date().toISOString()
-      };
-    }
+  const db = readDatabase();
+  const article = db.articles.find((a) => a.id === articleIdOrSlug || a.slug === articleIdOrSlug);
+  if (article) {
+    articleMeta = {
+      title: article.title,
+      summary: article.summary || article.excerpt || "Portal berita nasional & opini publik independen.",
+      image: article.image || article.imageUrl || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200",
+      slugOrId: article.slug || article.id,
+      authorName: article.author?.name || "Redaksi Liberta",
+      category: article.category || "Berita",
+      publishedDate: article.publishedAt || new Date().toISOString()
+    };
   }
 
   let html = fs.readFileSync(indexPath, "utf-8");

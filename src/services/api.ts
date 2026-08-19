@@ -405,116 +405,18 @@ export const api = {
   },
 };
 
-const getWpApiUrl = (): string => {
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WP_API_URL) {
-    return import.meta.env.VITE_WP_API_URL;
-  }
-  if (typeof process !== 'undefined' && process.env?.VITE_WP_API_URL) {
-    return process.env.VITE_WP_API_URL;
-  }
-  return 'https://jealous-reaction.localsite.io/wp-json/wp/v2';
-};
-
-const getWpHeaders = (): HeadersInit => {
-  const headers: Record<string, string> = {
-    'Accept': 'application/json'
-  };
-  const auth = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WP_AUTH) || (typeof process !== 'undefined' && process.env?.VITE_WP_AUTH) || 'Basic dm95YWdlOnBlcmZlY3Q=';
-  if (auth) {
-    headers['Authorization'] = auth.startsWith('Basic ') ? auth : `Basic ${auth}`;
-  }
-  return headers;
-};
-
-// Helper Transformer: Format data WordPress ke Interface Article Frontend Liberta
-export const transformWpPost = (post: any): Article => {
-  const featuredImage = 
-    post._embedded?.['wp:featuredmedia']?.[0]?.source_url || 
-    post.featured_media_url ||
-    'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200';
-
-  const categoryName = (post._embedded?.['wp:term']?.[0]?.[0]?.name || 'Pemerintahan') as CategoryType;
-
-  const rawHtml = post.content?.rendered || post.content || '';
-  const words = rawHtml.replace(/<[^>]+>/g, '').split(/\s+/).filter(Boolean).length;
-  const readTime = `${Math.max(1, Math.ceil(words / 180))} min baca`;
-
-  const authorName = post._embedded?.author?.[0]?.name || post.author_name || 'Redaksi Liberta';
-  const authorAvatar = post._embedded?.author?.[0]?.avatar_urls?.['96'] || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200';
-
-  return {
-    id: post.id.toString(),
-    title: post.title?.rendered || post.title || 'Tanpa Judul',
-    slug: post.slug || post.id.toString(),
-    excerpt: post.excerpt?.rendered?.replace(/<[^>]+>/g, '').trim() || post.title?.rendered || '',
-    category: categoryName,
-    publishedAt: post.date ? new Date(post.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terbaru',
-    author: {
-      name: authorName,
-      avatar: authorAvatar,
-      role: 'Tim Redaksi'
-    },
-    imageUrl: featuredImage,
-    content: rawHtml,
-    readTime: readTime,
-    isHeroHeadline: Boolean(post.sticky),
-    isEditorsPick: Boolean(post.meta?._is_editorial_choice || post.sticky),
-    views: post.meta?._views_count || Math.floor(Math.random() * 500) + 100
-  };
-};
-
 export const fetchArticles = async (page = 1, perPage = 20): Promise<Article[]> => {
-  const wpUrl = getWpApiUrl();
-  if (wpUrl) {
-    try {
-      const res = await fetch(`${wpUrl}/posts?_embed&page=${page}&per_page=${perPage}&status=publish`, { headers: getWpHeaders() }).catch(() => null);
-      if (res && res.ok) {
-        const data = await res.json().catch(() => null);
-        if (Array.isArray(data) && data.length > 0) {
-          return data.map(transformWpPost);
-        }
-      }
-    } catch (error) {
-      console.warn('Gagal mengambil data dari WordPress REST API, mencoba fallback:', error);
-    }
-  }
   return api.getArticles();
 };
 
 export const fetchArticleById = async (id: string): Promise<Article | null> => {
-  const wpUrl = getWpApiUrl();
-  if (wpUrl) {
-    try {
-      const res = await fetch(`${wpUrl}/posts/${id}?_embed`, { headers: getWpHeaders() }).catch(() => null);
-      if (res && res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data && data.id) {
-          return transformWpPost(data);
-        }
-      }
-    } catch (error) {
-      console.warn('Gagal mengambil detail dari WordPress REST API:', error);
-    }
-  }
   return api.getArticleById(id);
 };
 
-export const fetchArticlesByCategory = async (categoryId: number): Promise<Article[]> => {
-  const wpUrl = getWpApiUrl();
-  if (wpUrl) {
-    try {
-      const res = await fetch(`${wpUrl}/posts?_embed&categories=${categoryId}&status=publish`, { headers: getWpHeaders() }).catch(() => null);
-      if (res && res.ok) {
-        const data = await res.json().catch(() => null);
-        if (Array.isArray(data)) {
-          return data.map(transformWpPost);
-        }
-      }
-    } catch (error) {
-      console.warn('Gagal mengambil artikel berdasarkan kategori WP:', error);
-    }
-  }
-  return [];
+export const fetchArticlesByCategory = async (categoryName: string): Promise<Article[]> => {
+  const all = await api.getArticles();
+  if (!categoryName || categoryName === 'Semua') return all;
+  return all.filter((a) => a.category?.toLowerCase() === categoryName.toLowerCase());
 };
 
 export const createArticle = (data: any) => api.createArticle(data);
