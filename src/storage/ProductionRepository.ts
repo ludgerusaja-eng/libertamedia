@@ -10,6 +10,8 @@ export interface SessionRecord { id: string; userId: number; expiresAt: Date; }
 export interface ArticleWriteInput { id: string; slug: string; title: string; excerpt?: string; content: string; category: string; pillar?: string; imageUrl?: string; imageCaption?: string; authorId?: number | null; status?: EditorialStatus; scheduledAt?: Date | null; publishedAt?: Date | null; isHero?: boolean; isEditorChoice?: boolean; isTrending?: boolean; }
 export interface AuditContext { actorUserId?: number | null; action: string; entityType: string; entityId?: string | null; ipAddress?: string | null; userAgent?: string | null; metadata?: Record<string, unknown>; }
 
+const PUBLISHING_ROLES = new Set<UserRole>(['SUPER_ADMIN', 'MANAGING_EDITOR', 'EDITOR']);
+
 export class ProductionRepository {
   private readonly pool: Pool;
   constructor() {
@@ -51,6 +53,14 @@ export class ProductionRepository {
     return rows.length ? this.toArticle(rows[0]) : null;
   }
   async saveArticle(input: ArticleWriteInput, actorUserId?: number | null): Promise<void> {
+    if (['PUBLISHED', 'SCHEDULED'].includes(String(input.status)) && actorUserId) {
+      const [actorRows] = await this.pool.query<RowDataPacket[]>(`SELECT role FROM users WHERE id=? AND is_active=1 LIMIT 1`, [actorUserId]);
+      const actorRole = actorRows.length ? String(actorRows[0].role) as UserRole : null;
+      if (!actorRole || !PUBLISHING_ROLES.has(actorRole)) {
+        throw new Error(`Forbidden: role ${actorRole || 'UNKNOWN'} cannot publish or schedule articles`);
+      }
+    }
+
     const connection = await this.pool.getConnection();
     try {
       await connection.beginTransaction();
