@@ -40,7 +40,10 @@ chmod 750 "$UPLOAD_DIR"
 tar --exclude='node_modules' --exclude='tmp' --exclude='dist/uploads' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
 
 cd "$DEPLOYPATH"
-npm ci
+# package-lock.json is retained for compatibility/history but is intentionally
+# not used as the deployment source of truth until it is regenerated from the
+# current production package manifest.
+npm install --no-audit --no-fund
 npm rebuild sharp
 
 [ -f "$DEPLOYPATH/dist/server.cjs" ] || fail "dist/server.cjs is missing; deploy a successful production build first"
