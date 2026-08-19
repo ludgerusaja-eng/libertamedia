@@ -33,3 +33,25 @@ jobs:
 
       - name: Verify build output
         run: test -f dist/index.html && test -f dist/server.cjs
+
+      - name: Verify production files
+        run: |
+          test -f scripts/preflight.sh
+          test -f cpanel_mysql_setup.sql
+          test -f scripts/production_smoke_test.ts
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check for committed secrets and unsafe fallback credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE 'libertamedia2026|admin123|local-admin-token-|JWT_SECRET=.*(secret|password|liberta)' \
+            --exclude-dir=.git --exclude='*.md' --exclude='*.example' .; then
+            echo 'Unsafe credential/fallback pattern detected.'
+            exit 1
+          fi
