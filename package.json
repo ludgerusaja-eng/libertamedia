@@ -12,11 +12,13 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "check:api": "tsx scripts/api_contract_check.ts",
+    "check:launch": "bash scripts/launch_gate.sh",
     "generate:feeds": "tsx scripts/generate_feeds.ts",
     "migrate:mysql": "tsx scripts/migrate_json_to_mysql.ts",
     "seed:admin": "tsx scripts/seed_admin.ts",
     "publish:scheduled": "tsx scripts/publish_scheduled.ts",
-    "smoke:production": "tsx scripts/production_smoke_test.ts"
+    "smoke:production": "tsx scripts/production_smoke_test.ts",
+    "smoke:http": "bash scripts/http_smoke_test.sh"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -41,6 +43,7 @@
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "tsx": "^4.20.3"
   }
 }
