@@ -68,6 +68,15 @@ CREATE TABLE IF NOT EXISTS article_tags (
   FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS article_reactions (
+  article_id VARCHAR(100) NOT NULL,
+  reaction_type ENUM('claps','insightful','inspiring','critical') NOT NULL,
+  reaction_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (article_id, reaction_type),
+  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS comments (
   id VARCHAR(100) NOT NULL PRIMARY KEY, article_id VARCHAR(100) NOT NULL, author_name VARCHAR(160) NOT NULL, content TEXT NOT NULL,
   status ENUM('PENDING','APPROVED','REJECTED','SPAM','HIDDEN','DELETED') NOT NULL DEFAULT 'PENDING',
