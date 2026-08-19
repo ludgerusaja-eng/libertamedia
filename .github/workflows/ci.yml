@@ -29,6 +29,9 @@ jobs:
       - name: API contract check
         run: npm run check:api
 
+      - name: Shell syntax checks
+        run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh
+
       - name: Production build
         run: npm run build
         env:
@@ -44,6 +47,8 @@ jobs:
           test -f scripts/production_smoke_test.ts
           test -f scripts/api_contract_check.ts
           test -f scripts/publish_scheduled.ts
+          test -f scripts/generate_feeds.ts
+          test -f scripts/http_smoke_test.sh
 
   security:
     runs-on: ubuntu-latest
