@@ -1,7 +1,21 @@
 node_modules/
+dist/
 build/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+
+# Runtime data and uploads
+/data/
+/uploads/
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.tmp
+
+# Local tooling
+.vscode/
+.idea/
