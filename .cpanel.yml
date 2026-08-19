@@ -7,8 +7,7 @@ deployment:
     - /bin/cp -rf dist/* $DEPLOYPATH/
     - /bin/cp -f app.js $DEPLOYPATH/app.js
     - /bin/cp -f package.json $DEPLOYPATH/package.json
+    - /bin/cp -f package-lock.json $DEPLOYPATH/package-lock.json
     - /bin/cp -rf scripts $DEPLOYPATH/
     - /bin/cp -f .htaccess $DEPLOYPATH/.htaccess
-    - /bin/cp -f .env.example $DEPLOYPATH/.env.example
-    - /bin/chmod +x $DEPLOYPATH/scripts/setup_cpanel.sh $DEPLOYPATH/scripts/backup.sh
     - /bin/bash $DEPLOYPATH/scripts/setup_cpanel.sh
