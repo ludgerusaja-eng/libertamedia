@@ -25,17 +25,21 @@ set +a
 [ -n "${DB_PASSWORD:-}" ] || fail "DB_PASSWORD is missing"
 [ -n "${DB_NAME:-}" ] || fail "DB_NAME is missing"
 [ -n "${ADMIN_EMAIL:-}" ] || fail "ADMIN_EMAIL is missing"
+[ -n "${UPLOAD_DIR:-}" ] || fail "UPLOAD_DIR is missing"
 
 [ -f "$DEPLOYPATH/scripts/preflight.sh" ] || fail "Production preflight script is missing"
 chmod +x "$DEPLOYPATH/scripts/preflight.sh"
 "$DEPLOYPATH/scripts/preflight.sh" || fail "Production environment preflight failed"
 
-mkdir -p "$BACKUP_ROOT" "$BACKUP_DIR"
-tar --exclude='node_modules' --exclude='tmp' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
+mkdir -p "$BACKUP_ROOT" "$BACKUP_DIR" "$UPLOAD_DIR"
+case "$UPLOAD_DIR" in
+  "$DEPLOYPATH"/*) fail "UPLOAD_DIR must be outside public_html to prevent direct filesystem exposure" ;;
+esac
+chmod 750 "$UPLOAD_DIR"
+
+tar --exclude='node_modules' --exclude='tmp' --exclude='dist/uploads' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
 
 cd "$DEPLOYPATH"
-# Keep tsx available because scheduled publishing/feed generation are operational
-# cPanel jobs. The production server itself still runs from bundled dist/server.cjs.
 npm ci
 npm rebuild sharp
 
