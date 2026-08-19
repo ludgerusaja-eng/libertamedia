@@ -14,7 +14,6 @@ log "Starting LIBERTAMEDIA production deployment"
 [ -d "$DEPLOYPATH" ] || fail "Deployment path does not exist: $DEPLOYPATH"
 [ -f "$DEPLOYPATH/.env" ] || fail "Production .env is missing. Create it manually in cPanel; never copy .env.example into .env."
 
-# Required production settings. Fail closed instead of starting with unsafe defaults.
 set -a
 # shellcheck disable=SC1091
 source "$DEPLOYPATH/.env"
@@ -26,21 +25,21 @@ set +a
 [ -n "${ADMIN_PASSWORD:-}" ] || fail "ADMIN_PASSWORD is missing"
 [ -n "${JWT_SECRET:-}" ] || fail "JWT_SECRET is missing"
 
+[ -f "$DEPLOYPATH/scripts/preflight.sh" ] || fail "Production preflight script is missing"
+chmod +x "$DEPLOYPATH/scripts/preflight.sh"
+"$DEPLOYPATH/scripts/preflight.sh" || fail "Production environment preflight failed"
+
 mkdir -p "$BACKUP_ROOT"
 
-# Backup the current deployment before replacing it.
 if [ -d "$DEPLOYPATH" ]; then
   mkdir -p "$BACKUP_DIR"
-  # Preserve production environment separately and avoid recursive backup copies.
   tar --exclude='node_modules' --exclude='tmp' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
 fi
 
-# Install exactly the locked dependency graph.
 cd "$DEPLOYPATH"
 npm ci --omit=dev
 npm rebuild sharp
 
-# Verify the application bundle exists before restarting Passenger.
 [ -f "$DEPLOYPATH/dist/server.cjs" ] || fail "dist/server.cjs is missing; deploy a successful production build first"
 [ -f "$DEPLOYPATH/dist/index.html" ] || fail "dist/index.html is missing; deploy a successful production build first"
 
