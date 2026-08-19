@@ -4,13 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --external:fsevents --sourcemap --outfile=dist/server.cjs",
+    "dev": "vite",
+    "dev:server": "tsx server.production.ts",
+    "build": "vite build && esbuild server.production.ts --bundle --platform=node --format=cjs --external:fsevents --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "migrate:mysql": "tsx scripts/migrate_json_to_mysql.ts"
+    "migrate:mysql": "tsx scripts/migrate_json_to_mysql.ts",
+    "seed:admin": "tsx scripts/seed_admin.ts",
+    "smoke:production": "tsx scripts/production_smoke_test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
