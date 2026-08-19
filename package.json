@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "check:api": "tsx scripts/api_contract_check.ts",
     "migrate:mysql": "tsx scripts/migrate_json_to_mysql.ts",
     "seed:admin": "tsx scripts/seed_admin.ts",
     "smoke:production": "tsx scripts/production_smoke_test.ts"
