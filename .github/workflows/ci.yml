@@ -26,6 +26,9 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: API contract check
+        run: npm run check:api
+
       - name: Production build
         run: npm run build
         env:
@@ -39,6 +42,7 @@ jobs:
           test -f scripts/preflight.sh
           test -f cpanel_mysql_setup.sql
           test -f scripts/production_smoke_test.ts
+          test -f scripts/api_contract_check.ts
 
   security:
     runs-on: ubuntu-latest
