@@ -1,37 +1,58 @@
 #!/bin/bash
-# ==============================================================================
-# libertamedia.com — All-in-One Automated Setup & Deployment Hook for cPanel
-# ==============================================================================
+set -euo pipefail
 
-DEPLOYPATH="/home/libp7469/public_html"
-BACKUP_DIR="/home/libp7469/deploy_backups/backup_latest"
+# LIBERTAMEDIA production deployment hook for cPanel / Passenger.
+DEPLOYPATH="${DEPLOYPATH:-/home/libp7469/public_html}"
+BACKUP_ROOT="${BACKUP_ROOT:-/home/libp7469/deploy_backups}"
+BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d_%H%M%S)"
 
-echo "[$(date)] === STARTING AUTOMATED CPANEL SETUP & DEPLOYMENT ==="
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+fail() { log "ERROR: $*"; exit 1; }
 
-# 1. Automated Rollback Backup of existing public_html
-echo "[1/5] Creating automated pre-deploy backup..."
-mkdir -p /home/libp7469/deploy_backups
-cp -r "$DEPLOYPATH" "$BACKUP_DIR" 2>/dev/null || true
+log "Starting LIBERTAMEDIA production deployment"
+[ -d "$DEPLOYPATH" ] || fail "Deployment path does not exist: $DEPLOYPATH"
+[ -f "$DEPLOYPATH/.env" ] || fail "Production .env is missing. Create it manually in cPanel; never copy .env.example into .env."
 
-# 2. Automated Production .env Template Initialization (if not existing)
-if [ ! -f "$DEPLOYPATH/.env" ]; then
-    echo "[2/5] Initializing production .env from template..."
-    cp "$DEPLOYPATH/.env.example" "$DEPLOYPATH/.env" 2>/dev/null || true
-else
-    echo "[2/5] Production .env file exists. Preserving configuration."
-fi
+set -a
+# shellcheck disable=SC1091
+source "$DEPLOYPATH/.env"
+set +a
 
-# 3. Automated Permission Setup for Backup Script
-echo "[3/5] Setting executable permissions on scripts/backup.sh..."
-chmod +x "$DEPLOYPATH/scripts/backup.sh" 2>/dev/null || true
+[ "${NODE_ENV:-}" = "production" ] || fail "NODE_ENV must be production"
+[ "${DATABASE_TYPE:-}" = "mysql" ] || fail "DATABASE_TYPE must be mysql for production"
+[ -n "${DB_HOST:-}" ] || fail "DB_HOST is missing"
+[ -n "${DB_USER:-}" ] || fail "DB_USER is missing"
+[ -n "${DB_PASSWORD:-}" ] || fail "DB_PASSWORD is missing"
+[ -n "${DB_NAME:-}" ] || fail "DB_NAME is missing"
+[ -n "${ADMIN_EMAIL:-}" ] || fail "ADMIN_EMAIL is missing"
+[ -n "${UPLOAD_DIR:-}" ] || fail "UPLOAD_DIR is missing"
 
-# 4. Automated Sharp Native Rebuild for Linux cPanel Architecture
-echo "[4/5] Rebuilding Sharp native C++ binaries for cPanel Linux..."
-cd "$DEPLOYPATH" && npm rebuild sharp 2>/dev/null || true
+[ -f "$DEPLOYPATH/scripts/preflight.sh" ] || fail "Production preflight script is missing"
+chmod +x "$DEPLOYPATH/scripts/preflight.sh"
+"$DEPLOYPATH/scripts/preflight.sh" || fail "Production environment preflight failed"
 
-# 5. Automated Phusion Passenger Reload
-echo "[5/5] Reloading Phusion Passenger Node.js process..."
+mkdir -p "$BACKUP_ROOT" "$BACKUP_DIR" "$UPLOAD_DIR"
+case "$UPLOAD_DIR" in
+  "$DEPLOYPATH"/*) fail "UPLOAD_DIR must be outside public_html to prevent direct filesystem exposure" ;;
+esac
+chmod 750 "$UPLOAD_DIR"
+
+tar --exclude='node_modules' --exclude='tmp' --exclude='dist/uploads' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
+
+cd "$DEPLOYPATH"
+# Dependency resolution uses the current production package manifest.
+npm install --no-audit --no-fund
+npm rebuild sharp
+
+[ -f "$DEPLOYPATH/dist/server.cjs" ] || fail "dist/server.cjs is missing; deploy a successful production build first"
+[ -f "$DEPLOYPATH/dist/index.html" ] || fail "dist/index.html is missing; deploy a successful production build first"
+[ -f "$DEPLOYPATH/app.cjs" ] || fail "app.cjs is missing; Passenger cannot start the application"
+
+grep -q 'PassengerStartupFile app.cjs' "$DEPLOYPATH/.htaccess" || fail ".htaccess is not configured for app.cjs"
+
+# Regenerate SEO feeds from the current MySQL state before Passenger restart.
+npm run generate:feeds || fail "SEO feed generation failed"
+
 mkdir -p "$DEPLOYPATH/tmp"
 touch "$DEPLOYPATH/tmp/restart.txt"
-
-echo "[$(date)] === AUTOMATED CPANEL SETUP & DEPLOYMENT COMPLETED SUCCESSFULLY ==="
+log "LIBERTAMEDIA production deployment completed"

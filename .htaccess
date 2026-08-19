@@ -2,7 +2,7 @@
 <IfModule mod_passenger.c>
   PassengerEnabled On
   PassengerAppType node
-  PassengerStartupFile app.js
+  PassengerStartupFile app.cjs
 </IfModule>
 
 # Apache Rewrite Rules for libertamedia.com (cPanel Node.js / Phusion Passenger Routing)
@@ -10,16 +10,13 @@
   RewriteEngine On
   RewriteBase /
 
-  # 1. Allow direct static access ONLY for real asset files in assets/ or public files
+  # Static assets can be served directly.
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteCond %{REQUEST_URI} ^/(assets|favicon|uploads|images|media)/ [NC]
   RewriteRule ^ - [L]
 
-  # 2. Explicitly route /admin to app.js for Phusion Passenger
-  RewriteRule ^admin(.*)$ app.js [QSA,L]
-
-  # 3. Route all remaining SPA sub-paths (/berita/*, /p/*) to app.js
+  # Everything else is handled by the Passenger Node application.
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ app.js [QSA,L]
+  RewriteRule ^(.*)$ app.cjs [QSA,L]
 </IfModule>

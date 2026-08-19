@@ -1,0 +1,71 @@
+name: LIBERTAMEDIA CI
+
+on:
+  push:
+    branches: [main, 'agent/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run lint
+      - name: API contract check
+        run: npm run check:api
+      - name: Static production launch gate
+        run: npm run check:launch
+      - name: Shell syntax checks
+        run: bash -n scripts/preflight.sh scripts/setup_cpanel.sh scripts/http_smoke_test.sh scripts/launch_gate.sh scripts/backup_mysql.sh
+      - name: Production build
+        run: npm run build
+        env:
+          NODE_ENV: production
+      - name: Verify build output
+        run: test -f dist/index.html && test -f dist/server.cjs
+      - name: Verify production files
+        run: |
+          test -f app.cjs
+          test -f .htaccess
+          test -f cpanel_mysql_setup.sql
+          test -f scripts/preflight.sh
+          test -f scripts/production_smoke_test.ts
+          test -f scripts/api_contract_check.ts
+          test -f scripts/publish_scheduled.ts
+          test -f scripts/generate_feeds.ts
+          test -f scripts/http_smoke_test.sh
+          test -f scripts/launch_gate.sh
+          test -f scripts/backup_mysql.sh
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check for committed secrets and unsafe fallback credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nI -E 'libertamedia2026|admin123|local-admin-token-|JWT_SECRET=.*(secret|password|liberta)' -- \
+            ':(exclude)*.md' \
+            ':(exclude)*.example' \
+            ':(exclude)dist/**' \
+            ':(exclude)scripts/preflight.sh' \
+            ':(exclude)scripts/api_contract_check.ts' \
+            ':(exclude)scripts/launch_gate.sh' \
+            ':(exclude).github/workflows/ci.yml'; then
+            echo 'Unsafe credential/fallback pattern detected.'
+            exit 1
+          fi
+          echo 'Secret scan passed.'
