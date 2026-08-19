@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # LIBERTAMEDIA production deployment hook for cPanel / Passenger.
-DEPLOYPATH="${DEPLOYPATH:-/home/libp7469/public_html}"
+DEPLOYPATH="${DEPLOYPATH:-/home/libp7469/libertamedia}"
 BACKUP_ROOT="${BACKUP_ROOT:-/home/libp7469/deploy_backups}"
 BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d_%H%M%S)"
 
@@ -50,11 +50,11 @@ log "npm runtime: $(npm -v)"
 
 mkdir -p "$BACKUP_ROOT" "$BACKUP_DIR" "$UPLOAD_DIR"
 case "$UPLOAD_DIR" in
-  "$DEPLOYPATH"/*) fail "UPLOAD_DIR must be outside public_html to prevent direct filesystem exposure" ;;
+  "$DEPLOYPATH"/*) fail "UPLOAD_DIR must be outside the Passenger application root to prevent direct filesystem exposure" ;;
 esac
 chmod 750 "$UPLOAD_DIR"
 
-tar --exclude='node_modules' --exclude='tmp' --exclude='dist/uploads' -czf "$BACKUP_DIR/public_html.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
+tar --exclude='node_modules' --exclude='tmp' --exclude='dist/uploads' -czf "$BACKUP_DIR/libertamedia.tgz" -C "$DEPLOYPATH" . || fail "Pre-deploy backup failed"
 
 cd "$DEPLOYPATH"
 # Dependency resolution uses the current production package manifest.
