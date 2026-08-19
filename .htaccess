@@ -15,7 +15,10 @@
   RewriteCond %{REQUEST_URI} ^/(assets|favicon|uploads|images|media)/ [NC]
   RewriteRule ^ - [L]
 
-  # 2. Route all SPA & Admin sub-paths (/admin, /berita/*, /p/*) to Node.js Passenger app.js
+  # 2. Explicitly route /admin to app.js for Phusion Passenger
+  RewriteRule ^admin(.*)$ app.js [QSA,L]
+
+  # 3. Route all remaining SPA sub-paths (/berita/*, /p/*) to app.js
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^(.*)$ app.js [QSA,L]

@@ -1317,6 +1317,15 @@ async function startServer() {
       app.use(express.static(distPath));
     }
   } else {
+    // Explicit route for Admin Portal to guarantee HTTP 200 OK
+    app.get(["/admin", "/admin/*", "/admin.html"], (req, res) => {
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
+      return res.status(404).send("index.html not found.");
+    });
+
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       const indexPath = path.join(distPath, "index.html");
